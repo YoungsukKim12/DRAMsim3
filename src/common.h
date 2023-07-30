@@ -125,5 +125,6 @@ struct Transaction {
     friend std::istream& operator>>(std::istream& is, Transaction& trans);
 };
 
+
 }  // namespace dramsim3
 #endif

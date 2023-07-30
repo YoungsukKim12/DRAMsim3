@@ -67,5 +67,26 @@ class TraceBasedCPU : public CPU {
     bool get_next_ = true;
 };
 
+class TraceBasedCPUForHeterogeneousMemory : public CPU {
+   public:
+    TraceBasedCPUForHeterogeneousMemory(const std::string& config_file, const std::string& output_dir,
+                  const std::string& trace_file);
+    ~TraceBasedCPUForHeterogeneousMemory() { trace_file_.close(); }
+    void ClockTick() override;
+    void GetTrace(string filename);
+
+   private:
+    std::ifstream trace_file_;
+    Transaction trans_;
+    bool get_next_ = true;
+    std::vector<std::vector<uint64_t>> HBM_transaction;
+    std::vector<std::vector<uint64_t>> DIMM_transaction;
+
+    uint64_t HBM_complete_addr;
+    uint64_t DIMM_complete_addr;
+
+};
+
+
 }  // namespace dramsim3
 #endif
