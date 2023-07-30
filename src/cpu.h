@@ -5,6 +5,7 @@
 #include <functional>
 #include <random>
 #include <string>
+#include <list>
 #include "memory_system.h"
 
 namespace dramsim3 {
@@ -67,24 +68,75 @@ class TraceBasedCPU : public CPU {
     bool get_next_ = true;
 };
 
+
+class CPUForHetergeneousMemory {
+   public:
+    CPUForHetergeneousMemory(const std::string& config_file_HBM, const std::string& config_file_DIMM, const std::string& output_dir)
+        : memory_system_HBM(
+              config_file_HBM, output_dir,
+              std::bind(&CPUForHetergeneousMemory::ReadCallBack_HBM, this, std::placeholders::_1),
+              std::bind(&CPUForHetergeneousMemory::WriteCallBack_HBM, this, std::placeholders::_1)),
+        memory_system_DIMM(
+            config_file_DIMM, output_dir,
+              std::bind(&CPUForHetergeneousMemory::ReadCallBack_HBM, this, std::placeholders::_1),
+              std::bind(&CPUForHetergeneousMemory::WriteCallBack_DIMM, this, std::placeholders::_1)),
+          clk_HBM(0), clk_DIMM(0) {}
+    virtual void ClockTick() = 0;
+    void ReadCallBack_HBM(uint64_t addr) { return; }
+    void ReadCallBack_DIMM(uint64_t addr) { return; }
+    void WriteCallBack_HBM(uint64_t addr) { return; }
+    void WriteCallBack_DIMM(uint64_t addr) { return; }
+    void PrintStats() { memory_system_HBM.PrintStats(); }
+
+   protected:
+    MemorySystem memory_system_HBM;
+    MemorySystem memory_system_DIMM;
+    uint64_t clk_HBM;
+    uint64_t clk_DIMM;
+};
+
+
 class TraceBasedCPUForHeterogeneousMemory : public CPU {
    public:
-    TraceBasedCPUForHeterogeneousMemory(const std::string& config_file, const std::string& output_dir,
-                  const std::string& trace_file);
-    ~TraceBasedCPUForHeterogeneousMemory() { trace_file_.close(); }
-    void ClockTick() override;
-    void GetTrace(string filename);
+    TraceBasedCPUForHeterogeneousMemory(const std::string& config_file_HBM, const std::string& config_file_DIMM, const std::string& output_dir, const std::string& trace_file);
+    ~TraceBasedCPUForHeterogeneousMemory() {}
+
+    void ReadCallBack_HBM(uint64_t addr);
+    void ReadCallBack_DIMM(uint64_t addr);
+    void WriteCallBack_HBM(uint64_t addr){}
+    void WriteCallBack_DIMM(uint64_t addr){}
+    void PrintStats() { memory_system_HBM.PrintStats(); }
+    void ClockTick();
+    void LoadTrace(string filename);
+    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left);
+    bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist);
+    void HeterogeneousMemoryClockTick();
 
    private:
+    MemorySystem memory_system_HBM;
+    MemorySystem memory_system_DIMM;
+    uint64_t clk_HBM;
+    uint64_t clk_DIMM;
+
     std::ifstream trace_file_;
     Transaction trans_;
-    bool get_next_ = true;
+    bool HBM_get_next_ = true;
+    bool DIMM_get_next_ = true;
+    int complete_transactions = 0;
+    int add_cycle = 3;
+
     std::vector<std::vector<uint64_t>> HBM_transaction;
     std::vector<std::vector<uint64_t>> DIMM_transaction;
+
+    std::list<uint64_t> HBM_address_in_processing;
+    std::list<uint64_t> DIMM_address_in_processing;
 
     uint64_t HBM_complete_addr;
     uint64_t DIMM_complete_addr;
 
+    // for callback debug
+    int hbm_complete_count;
+    int dimm_complete_count;
 };
 
 

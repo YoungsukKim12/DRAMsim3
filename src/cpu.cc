@@ -90,47 +90,193 @@ void TraceBasedCPU::ClockTick() {
     return;
 }
 
-TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const std::string& config_file,
-                             const std::string& output_dir,
-                             const std::string& trace_file)
-    : CPU(config_file, output_dir) {
-
-    std::cout << "Using following trace file : " << std::endl;
+TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const std::string& config_file_HBM, 
+                                                                            const std::string& config_file_DIMM, 
+                                                                            const std::string& output_dir,
+                                                                            const std::string& trace_file)
+    : CPU(config_file_HBM, output_dir),
+    memory_system_HBM(config_file_HBM, output_dir,
+        std::bind(&TraceBasedCPUForHeterogeneousMemory::ReadCallBack_HBM, this, std::placeholders::_1),
+        std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack_HBM, this, std::placeholders::_1)),
+    memory_system_DIMM(config_file_DIMM, output_dir,
+            std::bind(&TraceBasedCPUForHeterogeneousMemory::ReadCallBack_DIMM, this, std::placeholders::_1),
+            std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack_DIMM, this, std::placeholders::_1))
+{
+    clk_HBM = 0;
+    clk_DIMM = 0;
     HBM_complete_addr = -1;
     DIMM_complete_addr = -1;
-    GetTrace(trace_file);
+    LoadTrace(trace_file);
+}
+
+void TraceBasedCPUForHeterogeneousMemory::HeterogeneousMemoryClockTick(){
+    // clock tick
+    memory_system_HBM.ClockTick();
+    if(clk_HBM %2 == 0)
+    {
+        memory_system_DIMM.ClockTick();
+        clk_DIMM++;
+    }    
+    clk_HBM++;
 }
 
 void TraceBasedCPUForHeterogeneousMemory::ClockTick() {
-    memory_system_.ClockTick();
-    if (!trace_file_.eof()) {
-        if (get_next_) {
-            get_next_ = false;
-            trace_file_ >> trans_;
-        }
 
-        if (trans_.added_cycle <= clk_) {
-            get_next_ = memory_system_.WillAcceptTransaction(trans_.addr,
-                                                             trans_.is_write);
-            if (get_next_) {
-                memory_system_.AddTransaction(trans_.addr, trans_.is_write);
+    // main function of ClockTick() : execute NMP
+
+    for(int i=0; i<HBM_transaction.size(); i++)
+    {
+
+        std::cout << i << "/" << HBM_transaction.size() << " processed" << std::endl;
+
+        int pooling_count = HBM_transaction[i].size() + DIMM_transaction[i].size();
+        int HBM_vectors_left = HBM_transaction[i].size();
+        int DIMM_vectors_left = DIMM_transaction[i].size();
+
+        // std::cout << "total transactions : " << pooling_count << std::endl;
+
+        // ------------------ Test -------------------- //
+        // for(int k=0; k<HBM_vectors_left; k++)
+        // {
+        //     std:: cout << HBM_transaction[i][k] << std::endl;
+        // }
+        // std:: cout << HBM_vectors_left << std::endl;
+        // -------------------------------------------- //
+
+        bool nmp_is_calculating = false;
+        int nmp_cycle_left = add_cycle;
+        int nmp_buffer_queue = 0;
+        hbm_complete_count = 0;
+        dimm_complete_count = 0;
+
+        while(pooling_count > 0 || nmp_buffer_queue > 0 || nmp_cycle_left > 0)
+        {
+            // processing nmp operation
+            if(nmp_is_calculating)
+            {
+                nmp_cycle_left--;
+                if(nmp_cycle_left == 0)
+                {
+                    nmp_is_calculating = false;
+                    nmp_cycle_left = 0;
+                }
+                // std::cout << nmp_cycle_left << std::endl;
             }
+            // start nmp add operation
+            if(nmp_buffer_queue > 0 && !nmp_is_calculating)
+            {
+                nmp_buffer_queue--;
+                nmp_is_calculating = true;
+                nmp_cycle_left = add_cycle;
+            }
+
+            HeterogeneousMemoryClockTick();
+            AddTransactionsToMemory(HBM_transaction[i], DIMM_transaction[i], HBM_vectors_left, DIMM_vectors_left);
+
+            // ReadCallback() increments complete_transactions when rd is complete
+            if(complete_transactions > 0)
+            {
+                // put data to nmp buffer queue
+                if(nmp_is_calculating)
+                    nmp_buffer_queue += complete_transactions;
+                else
+                {
+                    nmp_is_calculating = true;
+                    nmp_cycle_left = add_cycle;
+                    if(complete_transactions > 1)
+                        nmp_buffer_queue += (complete_transactions-1);
+                }
+                pooling_count -= complete_transactions;
+                complete_transactions = 0;
+            }                
+            
+            // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
+
         }
     }
-    clk_++;
+
+        //TODO : Debug HBM transaction vanishing
+
     return;
 }
 
-void TraceBasedCPUForHeterogeneousMemory::ReadCallBack(uint64_t addr)
-{
-    if(HBM_complete_addr != addr)
-        HBM_complete_addr = addr;
+void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left){
+    // add transaction to HBM
+    if(!(HBM_vectors_left <= 0))
+    {
+        HBM_get_next_ = memory_system_HBM.WillAcceptTransaction(HBM_transaction[HBM_vectors_left-1], false);
+        if (HBM_get_next_) {
+            memory_system_HBM.AddTransaction(HBM_transaction[HBM_vectors_left-1], false);
+            HBM_address_in_processing.push_back(HBM_transaction[HBM_vectors_left-1]);
+            HBM_vectors_left--;
+            // std:: cout << "HBM vectors left : " << HBM_vectors_left << std::endl;
+        }
+    }
 
-    if(DIMM_complete_addr != addr)
-        DIMM_complete_addr = addr;
+    // add transaction to DIMM
+    if(!(DIMM_vectors_left <= 0))
+    {
+        DIMM_get_next_ = memory_system_DIMM.WillAcceptTransaction(DIMM_transaction[DIMM_vectors_left-1], false);
+        if (DIMM_get_next_) {
+            memory_system_DIMM.AddTransaction(DIMM_transaction[DIMM_vectors_left-1], false);
+            DIMM_address_in_processing.push_back(DIMM_transaction[DIMM_vectors_left-1]);
+            DIMM_vectors_left--;
+            //  std:: cout << "DIMM vectors left : " << DIMM_vectors_left << std::endl;
+        }
+    }
 }
 
-void TraceBasedCPUForHeterogeneousMemory::GetTrace(string filename)
+void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_HBM(uint64_t addr)
+{
+    bool transaction_complete = UpdateInProcessTransactionList(addr, HBM_address_in_processing);
+    if(transaction_complete)
+        complete_transactions++;
+    HBM_complete_addr = addr;
+    // std::cout << "hbm complete : " << ++hbm_complete_count << std::endl;
+    
+}
+
+void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_DIMM(uint64_t addr)
+{
+    bool transaction_complete = UpdateInProcessTransactionList(addr, DIMM_address_in_processing);
+    if(transaction_complete)
+        complete_transactions++;
+    DIMM_complete_addr = addr;
+    // std::cout << "dimm complete : " << ++dimm_complete_count << std::endl;
+}
+
+bool TraceBasedCPUForHeterogeneousMemory::UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist)
+{
+    bool address_found=false;
+    for (std::list<uint64_t>::iterator i=transactionlist.begin(); i!=transactionlist.end(); i++)
+    {
+       if(*i == addr)
+           address_found=true;
+    }
+
+    // this logic is for considering duplicate address case
+    if(address_found)
+    {
+
+        //std :: cout << "HBM " << addr << std::endl;
+        int original_length = transactionlist.size();
+        transactionlist.remove(addr);
+        int changed_length = transactionlist.size();
+        int repush = original_length - changed_length - 1;
+        // if(repush != 0)
+        //     std :: cout << "repushing address : " << addr << " by amount of " << repush << std::endl;
+        for(int i=0; i<repush; i++)
+            transactionlist.push_back(addr);
+    }
+
+    if(address_found)
+        return true;
+    else
+        return false;
+}
+
+
+void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
 {
     std::string line, str_tmp;
     std::ifstream file(filename);
@@ -150,8 +296,6 @@ void TraceBasedCPUForHeterogeneousMemory::GetTrace(string filename)
     {
         while (std::getline(file, line, '\n'))
         {
-            if(count==3)
-                exit(0);
             if(line.empty())
             {
                 count++;
@@ -184,7 +328,7 @@ void TraceBasedCPUForHeterogeneousMemory::GetTrace(string filename)
                 str_count++;
             }
 
-            std::cout << addr << std::endl;
+            // std::cout << addr << std::endl;
 
             if(mode == "HBM")
                 HBM_transaction[count].push_back(addr);

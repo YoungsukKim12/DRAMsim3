@@ -27,6 +27,9 @@ int main(int argc, const char **argv) {
         {'t', "trace"});
     args::Positional<std::string> config_arg(
         parser, "config", "The config file name (mandatory)");
+    args::ValueFlag<std::string> sub_config_arg(
+        parser, "config", "The second config file name",
+        {'f', "subconf"});
 
     try {
         parser.ParseCLI(argc, argv);
@@ -44,15 +47,21 @@ int main(int argc, const char **argv) {
         std::cerr << parser;
         return 1;
     }
+    std::string sub_config = args::get(sub_config_arg);
+    if (sub_config.empty()) {
+        std::cerr << parser;
+        return 1;
+    }
 
     uint64_t cycles = args::get(num_cycles_arg);
     std::string output_dir = args::get(output_dir_arg);
     std::string trace_file = args::get(trace_file_arg);
     std::string stream_type = args::get(stream_arg);
 
+
     CPU *cpu;
     if (!trace_file.empty()) {
-        cpu = new TraceBasedCPUForHeterogeneousMemory(config_file, output_dir, trace_file);
+        cpu = new TraceBasedCPUForHeterogeneousMemory(config_file, sub_config, output_dir, trace_file);
         // cpu = new TraceBasedCPU(config_file, output_dir, trace_file);
     } else {
         if (stream_type == "stream" || stream_type == "s") {
