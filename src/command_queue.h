@@ -7,6 +7,8 @@
 #include "common.h"
 #include "configuration.h"
 #include "simple_stats.h"
+#include "command_queue.h"
+#include "bg_pim.h"
 
 namespace dramsim3 {
 
@@ -18,7 +20,7 @@ class CommandQueue {
    public:
     CommandQueue(int channel_id, const Config& config,
                  const ChannelState& channel_state, SimpleStats& simple_stats);
-    Command GetCommandToIssue();
+    Command GetCommandToIssue(std::vector<BGPIM> bg_pims_);
     Command FinishRefresh();
     void ClockTick() { clk_ += 1; };
     bool WillAcceptCommand(int rank, int bankgroup, int bank) const;

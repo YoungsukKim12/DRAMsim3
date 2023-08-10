@@ -115,7 +115,7 @@ class HMCMemorySystem : public BaseDRAMSystem {
 
     // had to have 3 insert interfaces cuz HMC is so different...
     bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const override;
-    bool AddTransaction(uint64_t hex_addr, bool is_write) override;
+    bool AddTransaction(uint64_t hex_addr, bool is_write, bool vector_transfer, bool is_r_vec) override;
     bool InsertReqToLink(HMCRequest* req, int link);
     bool InsertHMCReq(HMCRequest* req);
 

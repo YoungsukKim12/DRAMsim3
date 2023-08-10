@@ -58,7 +58,6 @@ int main(int argc, const char **argv) {
     std::string trace_file = args::get(trace_file_arg);
     std::string stream_type = args::get(stream_arg);
 
-
     CPU *cpu;
     if (!trace_file.empty()) {
         cpu = new TraceBasedCPUForHeterogeneousMemory(config_file, sub_config, output_dir, trace_file);
@@ -71,10 +70,10 @@ int main(int argc, const char **argv) {
         }
     }
 
-    for (uint64_t clk = 0; clk < cycles; clk++) {
-        cpu->ClockTick();
-    }
-    cpu->PrintStats();
+//    for (uint64_t clk = 0; clk < cycles; clk++) {
+//        cpu->ClockTick();
+//    }
+//    cpu->PrintStats();
 
     delete cpu;
 

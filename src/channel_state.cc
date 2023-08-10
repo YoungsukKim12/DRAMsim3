@@ -160,17 +160,20 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                     .other_banks_same_bankgroup[static_cast<int>(cmd.cmd_type)],
                 clk);
 
-            // Other bankgroups
-            UpdateOtherBankgroupsSameRankTiming(
-                cmd.addr,
-                timing_
-                    .other_bankgroups_same_rank[static_cast<int>(cmd.cmd_type)],
-                clk);
+            if(!config_.PIM_enabled)
+            {
+                // Other bankgroups
+                UpdateOtherBankgroupsSameRankTiming(
+                    cmd.addr,
+                    timing_
+                        .other_bankgroups_same_rank[static_cast<int>(cmd.cmd_type)],
+                    clk);
 
-            // Other ranks
-            UpdateOtherRanksTiming(
-                cmd.addr, timing_.other_ranks[static_cast<int>(cmd.cmd_type)],
-                clk);
+                // Other ranks
+                UpdateOtherRanksTiming(
+                    cmd.addr, timing_.other_ranks[static_cast<int>(cmd.cmd_type)],
+                    clk);
+            }
             break;
         case CommandType::REFRESH:
         case CommandType::SREF_ENTER:

@@ -17,6 +17,7 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
       simple_stats_(config_, channel_id_),
       channel_state_(config, timing),
       cmd_queue_(channel_id_, config, channel_state_, simple_stats_),
+      bg_pims_(),
       refresh_(config, channel_state_),
 #ifdef THERMAL
       thermal_calc_(thermal_calc),
@@ -34,12 +35,18 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
         write_buffer_.reserve(config_.trans_queue_size);
     }
 
+    bg_pims_.reserve(config_.bankgroups);
+    for(int i=0; i < config_.bankgroups; i++){
+        bg_pims_.push_back(BGPIM());
+    }
+
 #ifdef CMD_TRACE
     std::string trace_file_name = config_.output_prefix + "ch_" +
                                   std::to_string(channel_id_) + "cmd.trace";
     std::cout << "Command Trace write to " << trace_file_name << std::endl;
     cmd_trace_.open(trace_file_name, std::ofstream::out);
 #endif  // CMD_TRACE
+
 }
 
 std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
@@ -74,7 +81,7 @@ void Controller::ClockTick() {
 
     // cannot find a refresh related command or there's no refresh
     if (!cmd.IsValid()) {
-        cmd = cmd_queue_.GetCommandToIssue();
+        cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
     }
 
     if (cmd.IsValid()) {
@@ -82,7 +89,7 @@ void Controller::ClockTick() {
         cmd_issued = true;
 
         if (config_.enable_hbm_dual_cmd) {
-            auto second_cmd = cmd_queue_.GetCommandToIssue();
+            auto second_cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
             if (second_cmd.IsValid()) {
                 if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
                     IssueCommand(second_cmd);
@@ -219,9 +226,19 @@ void Controller::ScheduleTransaction() {
                 }
                 write_draining_ -= 1;
             }
-            cmd_queue_.AddCommand(cmd);
-            queue.erase(it);
-            break;
+            if(config_.PIM_enabled){
+                if(!bg_pims_[cmd.Bankgroup()].IsRVector(*it)){
+                    cmd_queue_.AddCommand(cmd);
+                    queue.erase(it);
+                    (*it).skewed_cycle = clk_ + config_.skewed_cycle;
+                    bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it);
+                    break;
+                }
+            }else{
+                cmd_queue_.AddCommand(cmd);
+                queue.erase(it);
+                break;                
+            }
         }
     }
 }
@@ -245,7 +262,13 @@ void Controller::IssueCommand(const Command &cmd) {
         while (num_reads > 0) {
             auto it = pending_rd_q_.find(cmd.hex_addr);
             it->second.complete_cycle = clk_ + config_.read_delay;
-            return_queue_.push_back(it->second);
+            if(!config_.PIM_enabled)
+                return_queue_.push_back(it->second);
+            else
+            {
+                if(it->second.vector_transfer)
+                    return_queue_.push_back(it->second);
+            }
             pending_rd_q_.erase(it);
             num_reads -= 1;
         }

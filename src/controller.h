@@ -10,6 +10,7 @@
 #include "common.h"
 #include "refresh.h"
 #include "simple_stats.h"
+#include "bg_pim.h"
 
 #ifdef THERMAL
 #include "thermal.h"
@@ -45,6 +46,7 @@ class Controller {
     SimpleStats simple_stats_;
     ChannelState channel_state_;
     CommandQueue cmd_queue_;
+    std::vector<BGPIM> bg_pims_;
     Refresh refresh_;
 
 #ifdef THERMAL

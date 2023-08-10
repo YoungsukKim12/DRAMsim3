@@ -134,6 +134,9 @@ class Config {
     bool aggressive_precharging_enabled;
     bool enable_hbm_dual_cmd;
 
+    // PIM parameters
+    bool PIM_enabled;
+    uint64_t skewed_cycle;
 
     int epoch_period;
     int output_level;

@@ -33,7 +33,7 @@ CommandQueue::CommandQueue(int channel_id, const Config& config,
     }
 }
 
-Command CommandQueue::GetCommandToIssue() {
+Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
     for (int i = 0; i < num_queues_; i++) {
         auto& queue = GetNextQueue();
         // if we're refresing, skip the command queues that are involved
@@ -44,10 +44,25 @@ Command CommandQueue::GetCommandToIssue() {
         }
         auto cmd = GetFirstReadyInQueue(queue);
         if (cmd.IsValid()) {
-            if (cmd.IsReadWrite()) {
-                EraseRWCommand(cmd);
+            if(config_.PIM_enabled){
+                if(cmd.IsReadWrite()){
+                    if(bg_pims_[cmd.Bankgroup()].CommandIssuable(cmd, clk_)){
+                        bg_pims_[cmd.Bankgroup()].ReleaseCommand(cmd, clk_);
+                        EraseRWCommand(cmd);
+                        return cmd;
+                    }
+                    else
+                        return Command();
+                }
+                return cmd;
             }
-            return cmd;
+            else
+            {
+                if (cmd.IsReadWrite()) {
+                    EraseRWCommand(cmd);
+                }
+                return cmd;
+            }
         }
     }
     return Command();

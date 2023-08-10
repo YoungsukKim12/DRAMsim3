@@ -107,10 +107,17 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void WriteCallBack_DIMM(uint64_t addr){}
     void PrintStats() { memory_system_HBM.PrintStats(); }
     void ClockTick();
+    void RunNMP();
+    void RunHEAM();
     void LoadTrace(string filename);
-    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left);
+    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
     bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist);
     void HeterogeneousMemoryClockTick();
+    int GetBankGroup(uint64_t address);
+    int GetChannel(uint64_t address);
+    std::unordered_map<int, uint64_t> ProfileAddresses(const std::vector<uint64_t>& addresses);
+    bool IsLastAddressInBankGroup(const std::unordered_map<int, uint64_t>& lastAddressInBankGroup, uint64_t address);
+    int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
 
    private:
     MemorySystem memory_system_HBM;
@@ -137,6 +144,10 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     // for callback debug
     int hbm_complete_count;
     int dimm_complete_count;
+
+    bool is_using_HEAM;
+    int channels = 16;
+    int bankgroups = 4;
 };
 
 

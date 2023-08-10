@@ -244,6 +244,9 @@ void Config::InitSystemParams() {
     aggressive_precharging_enabled =
         reader.GetBoolean("system", "aggressive_precharging_enabled", false);
 
+    // PIM parameters
+    PIM_enabled = reader.GetBoolean("system", "PIM_enabled", false);
+    skewed_cycle = GetInteger("system", "trans_queue_size", 64);
     return;
 }
 
