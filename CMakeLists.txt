@@ -32,6 +32,7 @@ add_library(dramsim3 SHARED
     src/command_queue.cc
     src/common.cc
     src/configuration.cc
+    src/bg_pim.cc
     src/controller.cc
     src/dram_system.cc
     src/hmc.cc
@@ -39,7 +40,6 @@ add_library(dramsim3 SHARED
     src/simple_stats.cc
     src/timing.cc
     src/memory_system.cc
-    src/bg_pim.cc
 )
 
 if (THERMAL)

@@ -48,7 +48,10 @@ void BGPIM::ReleaseCommand(Command cmd, uint64_t clk)
     for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
     {
         if(cmd.hex_addr == it->addr && it->skewed_cycle <= clk)
+        {
             instruction_queue.erase(it);
+            break;
+        }
     }
 }
 
@@ -56,6 +59,7 @@ void BGPIM::ReleaseCommand(Command cmd, uint64_t clk)
 // checking r vector is determined by looking its address
 bool BGPIM::IsRVector(Transaction trans)
 {
+    // std::cout <<  "check addr : " << trans.addr << " is r vec : " << trans.is_r_vec << std::endl;
     // this code is for temporary use; must think of better idea
     if(trans.is_r_vec)
         return true;
@@ -66,7 +70,7 @@ bool BGPIM::IsRVector(Transaction trans)
 void BGPIM::InsertPIMInst(Transaction trans)
 {
     instruction_queue.push_back(trans);
-    std::cout << "address : " << trans.addr << "r vector : " << trans.is_r_vec << std::endl;
+    // std::cout << "Insert addr : " << trans.addr << " r vector : " << trans.is_r_vec << std::endl;
 }
 
 // check cmd's address to determine if the transaction with the same address inside PIM instruction queue has its vector transfer bit marked as 1
@@ -76,6 +80,8 @@ bool BGPIM::IsTransferTrans(Transaction trans)
         return true;
     return false;
 }
+
+
 
 // // PIM computation is complete
 // bool BGPIM::PIMComplete()

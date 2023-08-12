@@ -42,6 +42,7 @@ Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
                 continue;
             }
         }
+
         auto cmd = GetFirstReadyInQueue(queue);
         if (cmd.IsValid()) {
             if(config_.PIM_enabled){
@@ -49,6 +50,7 @@ Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
                     if(bg_pims_[cmd.Bankgroup()].CommandIssuable(cmd, clk_)){
                         bg_pims_[cmd.Bankgroup()].ReleaseCommand(cmd, clk_);
                         EraseRWCommand(cmd);
+
                         return cmd;
                     }
                     else

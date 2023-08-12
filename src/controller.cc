@@ -73,6 +73,19 @@ void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
 
+//         std::cout << channel_id_ << " vec size "<< read_queue_.size() << std::endl;
+
+//     int k = 0;
+//     for(auto it=read_queue_.begin(); it != read_queue_.end(); it++)
+//     {
+//         if(channel_id_ == 0)
+//             std::cout << it->addr << std::endl;
+//         k++;
+// //        std::cout << it->addr << std::endl;
+//     }
+//     std::cout << channel_id_ << " vec count "<< k<<std::endl;
+//     k=0;
+
     bool cmd_issued = false;
     Command cmd;
     if (channel_state_.IsRefreshWaiting()) {
@@ -98,6 +111,10 @@ void Controller::ClockTick() {
             }
         }
     }
+    // std::cout << "command issue complete on channel : " << channel_id_ << ", cmd addr : " << cmd.hex_addr << std::endl;
+    // std::cout << "total reads on channel : " << read_queue_.size() << std::endl;
+    // std::cout << "valid command? : " << cmd.IsValid() << std::endl;
+
 
     // power updates pt 1
     for (int i = 0; i < config_.ranks; i++) {
@@ -148,7 +165,12 @@ void Controller::ClockTick() {
         }
     }
 
+    // std::cout << "command issue of refresh complete on channel : " << channel_id_ << std::endl;
+
     ScheduleTransaction();
+
+    // std::cout << "schedule transaction complete on channel : " << channel_id_ << "\n" << std::endl;
+
     clk_++;
     cmd_queue_.ClockTick();
     simple_stats_.Increment("num_cycles");
@@ -214,6 +236,7 @@ void Controller::ScheduleTransaction() {
     std::vector<Transaction> &queue =
         is_unified_queue_ ? unified_queue_
                           : write_draining_ > 0 ? write_buffer_ : read_queue_;
+
     for (auto it = queue.begin(); it != queue.end(); it++) {
         auto cmd = TransToCommand(*it);
         if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
@@ -226,18 +249,29 @@ void Controller::ScheduleTransaction() {
                 }
                 write_draining_ -= 1;
             }
+
             if(config_.PIM_enabled){
-                if(!bg_pims_[cmd.Bankgroup()].IsRVector(*it)){
-                    cmd_queue_.AddCommand(cmd);
+                if(bg_pims_[cmd.Bankgroup()].IsRVector(*it))
+                {
                     queue.erase(it);
+                    // std::cout << "channel "<< channel_id_ << " queue size "<< queue.size() << std::endl;
+                    auto pending_rd_q_it = pending_rd_q_.find(it->addr);
+                    pending_rd_q_.erase(pending_rd_q_it);
+                    break;
+                }
+                else
+                {
+                    // std::cout << channel_id_ << " addr : " << it->addr << std::endl;
                     (*it).skewed_cycle = clk_ + config_.skewed_cycle;
                     bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it);
+                    cmd_queue_.AddCommand(cmd);
+                    queue.erase(it); 
                     break;
                 }
             }else{
                 cmd_queue_.AddCommand(cmd);
                 queue.erase(it);
-                break;                
+                break;
             }
         }
     }
@@ -266,7 +300,7 @@ void Controller::IssueCommand(const Command &cmd) {
                 return_queue_.push_back(it->second);
             else
             {
-                if(it->second.vector_transfer)
+                if(bg_pims_[cmd.Bankgroup()].IsTransferTrans(it->second))
                     return_queue_.push_back(it->second);
             }
             pending_rd_q_.erase(it);
@@ -284,8 +318,13 @@ void Controller::IssueCommand(const Command &cmd) {
         pending_wr_q_.erase(it);
     }
     // must update stats before states (for row hits)
+    // std::cout << "----- processing in controller -----" << std::endl;
+    // std::cout << "\t Issuing addr : " << cmd.hex_addr << " in channel : " << channel_id_ << std::endl;
+    // std::cout << "------------------------------\n" << std::endl;
+
     UpdateCommandStats(cmd);
     channel_state_.UpdateTimingAndStates(cmd, clk_);
+
 }
 
 Command Controller::TransToCommand(const Transaction &trans) {

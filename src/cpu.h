@@ -148,6 +148,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     bool is_using_HEAM;
     int channels = 16;
     int bankgroups = 4;
+    int vec_transfers = 0;
 };
 
 

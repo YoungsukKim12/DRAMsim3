@@ -119,9 +119,9 @@ struct Transaction {
           added_cycle(tran.added_cycle),
           complete_cycle(tran.complete_cycle),
           is_write(tran.is_write),
-          skewed_cycle(0),
-          vector_transfer(false),
-          is_r_vec(false) {}
+          skewed_cycle(tran.skewed_cycle),
+          vector_transfer(tran.vector_transfer),
+          is_r_vec(tran.is_r_vec) {}
     Transaction(uint64_t addr, bool is_write, uint64_t skewed_cycle, bool vector_transfer, bool is_r_vec)
         : addr(addr),
           added_cycle(0),
