@@ -242,7 +242,9 @@ bool Controller::AddTransaction(Transaction trans) {
                 unified_queue_.push_back(trans);
             } else {
                 read_queue_.push_back(trans);
-                if(trans.vector_transfer)
+        // std::cout << "pim values! : " << trans.pim_values.skewed_cycle << trans.pim_values.is_r_vec << trans.pim_values.vector_transfer << std::endl;
+
+                if(trans.pim_values.vector_transfer)
                 {
                     // std::cout << trans.addr << " " << trans.vector_transfer << std::endl;
 
@@ -293,7 +295,7 @@ void Controller::ScheduleTransaction() {
                 {
                     // std::cout << "----------------------------------------------" << std::endl;
                     // std::cout << "on ch, bg : " << cmd.Channel() << " " << cmd.Bankgroup()  << " input addr : " << it->addr << std::endl;
-                    (*it).skewed_cycle = clk_ + config_.skewed_cycle;
+                    (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
                     // bg_pims_[cmd.Bankgroup()].PrintAddress();
                     bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it, cmd);
                     cmd_queue_.AddCommand(cmd);

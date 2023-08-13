@@ -125,7 +125,7 @@ bool JedecDRAMSystem::WillAcceptTransaction(uint64_t hex_addr,
     return ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write);
 }
 
-bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, bool transfer_vec, bool is_r_vec) {
+bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) {
 // Record trace - Record address trace for debugging or other purposes
 #ifdef ADDR_TRACE
     address_trace_ << std::hex << hex_addr << std::dec << " "
@@ -137,7 +137,7 @@ bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, bool tran
 
     assert(ok);
     if (ok) {
-        Transaction trans = Transaction(hex_addr, is_write, config_.skewed_cycle, transfer_vec, is_r_vec);
+        Transaction trans = Transaction(hex_addr, is_write, pim_values);
         ctrls_[channel]->AddTransaction(trans);
     }
     last_req_clk_ = clk_;
@@ -177,7 +177,7 @@ IdealDRAMSystem::IdealDRAMSystem(Config &config, const std::string &output_dir,
 
 IdealDRAMSystem::~IdealDRAMSystem() {}
 
-bool IdealDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, bool vector_transfer, bool is_r_vec) {
+bool IdealDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) {
     auto trans = Transaction(hex_addr, is_write);
     trans.added_cycle = clk_;
     infinite_buffer_q_.push_back(trans);

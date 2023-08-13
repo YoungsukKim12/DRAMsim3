@@ -7,6 +7,7 @@
 #include "configuration.h"
 #include "dram_system.h"
 #include "hmc.h"
+#include "common.h"
 
 namespace dramsim3 {
 
@@ -28,7 +29,7 @@ class MemorySystem {
     void ResetStats();
 
     bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const;
-    bool AddTransaction(uint64_t hex_addr, bool is_write, bool transfer_vec, bool is_r_vec);
+    bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values);
 
    private:
     // These have to be pointers because Gem5 will try to push this object

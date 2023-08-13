@@ -107,6 +107,31 @@ struct Command {
     friend std::ostream& operator<<(std::ostream& os, const Command& cmd);
 };
 
+struct PimValues {
+    PimValues()
+        : skewed_cycle(0), 
+          vector_transfer(false), 
+          is_r_vec(false), 
+          batch_tag(false) {} // Default constructor
+    
+    PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, int batchTag)
+        : skewed_cycle(skewedCycle), 
+          vector_transfer(vectorTransfer), 
+          is_r_vec(isRVec), 
+          batch_tag(batchTag) {} // Parameterized constructor
+
+    PimValues(const PimValues& pim_values)
+        : skewed_cycle(pim_values.skewed_cycle), 
+          vector_transfer(pim_values.vector_transfer), 
+          is_r_vec(pim_values.is_r_vec), 
+          batch_tag(pim_values.batch_tag) {} // Parameterized constructor
+
+    uint64_t skewed_cycle;
+    bool vector_transfer;
+    bool is_r_vec;
+    int batch_tag;
+};
+
 struct Transaction {
     Transaction() {}
     Transaction(uint64_t addr, bool is_write)
@@ -114,25 +139,19 @@ struct Transaction {
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
-          skewed_cycle(0),
-          vector_transfer(false),
-          is_r_vec(false) {}
+          pim_values() {}
     Transaction(const Transaction& tran)
         : addr(tran.addr),
           added_cycle(tran.added_cycle),
           complete_cycle(tran.complete_cycle),
           is_write(tran.is_write),
-          skewed_cycle(tran.skewed_cycle),
-          vector_transfer(tran.vector_transfer),
-          is_r_vec(tran.is_r_vec) {}
-    Transaction(uint64_t addr, bool is_write, uint64_t skewed_cycle, bool vector_transfer, bool is_r_vec)
+          pim_values(tran.pim_values) {}
+    Transaction(uint64_t addr, bool is_write, PimValues pim_values_)
         : addr(addr),
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
-          skewed_cycle(skewed_cycle),
-          vector_transfer(vector_transfer),
-          is_r_vec(is_r_vec) {}
+          pim_values(pim_values_) {}
 
     uint64_t addr;
     uint64_t added_cycle;
@@ -140,13 +159,12 @@ struct Transaction {
     bool is_write;
 
     // PIM parameters
-    uint64_t skewed_cycle;
-    bool vector_transfer;
-    bool is_r_vec;
+    PimValues pim_values;
 
     friend std::ostream& operator<<(std::ostream& os, const Transaction& trans);
     friend std::istream& operator>>(std::istream& is, Transaction& trans);
 };
+
 
 
 }  // namespace dramsim3

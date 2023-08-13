@@ -7,6 +7,7 @@
 #include <string>
 #include <list>
 #include "memory_system.h"
+#include "common.h"
 
 namespace dramsim3 {
 
@@ -110,7 +111,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void RunNMP();
     void RunHEAM();
     void LoadTrace(string filename);
-    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
+    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address, int batch_tag);
     bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
     void HeterogeneousMemoryClockTick();
     int GetBankGroup(uint64_t address);
@@ -149,6 +150,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int channels = 16;
     int bankgroups = 4;
     int vec_transfers = 0;
+    int batch_size = 0;
 };
 
 
