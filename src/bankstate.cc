@@ -86,8 +86,25 @@ Command BankState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
     }
 
     if (required_type != CommandType::SIZE) {
+        // if(!(cmd.hex_addr == 18446744073709551615))
+        // {
+        //     std::cout << "addr : " << cmd.hex_addr << " timing : " << cmd_timing_[static_cast<int>(required_type)] << " clk : " << clk << std::endl;
+        // }
         if (clk >= cmd_timing_[static_cast<int>(required_type)]) {
+            {
+                // if(!(cmd.hex_addr == 18446744073709551615))
+                // {
+                //         std::cout << "address : " << cmd.hex_addr << " is read?? " << cmd.IsRead() << std::endl;
+                // }
+
+                // if(!(cmd.hex_addr == 18446744073709551615) && !(clk ))
+                // {
+                //     std::cout << "addr : " << cmd.hex_addr << " timing : " << cmd_timing_[static_cast<int>(required_type)] << " clk : " << clk << std::endl;
+                // }
+
             return Command(required_type, cmd.addr, cmd.hex_addr);
+
+            }
         }
     }
     return Command();

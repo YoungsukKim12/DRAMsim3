@@ -84,6 +84,9 @@ struct Command {
         return cmd_type == CommandType ::WRITE ||
                cmd_type == CommandType ::WRITE_PRECHARGE;
     }
+    bool IsAct() const{
+        return cmd_type == CommandType::ACTIVATE;
+    }
     bool IsReadWrite() const { return IsRead() || IsWrite(); }
     bool IsRankCMD() const {
         return cmd_type == CommandType::REFRESH ||

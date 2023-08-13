@@ -95,25 +95,50 @@ void Controller::ClockTick() {
     // cannot find a refresh related command or there's no refresh
     if (!cmd.IsValid()) {
         cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
+
+        // if(!(cmd.hex_addr==0))
+            // std::cout << "command issued : " << cmd.hex_addr << " is valid ? " << cmd.IsValid() << std::endl;
+        // if(!(cmd.hex_addr == 0))
+        // std::cout << "cmd addr : " << cmd.hex_addr <<std::endl;
     }
 
+        // std:: cout << "valid command ? " << cmd.IsValid() << std::endl;
+
+
     if (cmd.IsValid()) {
+
         IssueCommand(cmd);
         cmd_issued = true;
 
         if (config_.enable_hbm_dual_cmd) {
-            auto second_cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
+            Command second_cmd;
+            second_cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
+
+        if(!(second_cmd.hex_addr==0))
+            // std::cout << "second command issued : " << second_cmd.hex_addr << " is valid ? " << cmd.IsValid() << std::endl;
+
             if (second_cmd.IsValid()) {
                 if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
                     IssueCommand(second_cmd);
                     simple_stats_.Increment("hbm_dual_cmds");
                 }
+                else
+                {
+                    std::cout << "add command again! "<< std::endl;
+                    cmd_queue_.AddCommand(second_cmd);
+                    std::cout << "add command finish! "<< std::endl;
+
+                }
             }
         }
     }
+    // if(read_queue_.size() > 0 || cmd.hex_addr != 0)
+    // {
     // std::cout << "command issue complete on channel : " << channel_id_ << ", cmd addr : " << cmd.hex_addr << std::endl;
     // std::cout << "total reads on channel : " << read_queue_.size() << std::endl;
     // std::cout << "valid command? : " << cmd.IsValid() << std::endl;
+
+    // }
 
 
     // power updates pt 1
@@ -217,6 +242,11 @@ bool Controller::AddTransaction(Transaction trans) {
                 unified_queue_.push_back(trans);
             } else {
                 read_queue_.push_back(trans);
+                if(trans.vector_transfer)
+                {
+                    // std::cout << trans.addr << " " << trans.vector_transfer << std::endl;
+
+                }
             }
         }
         return true;
@@ -261,10 +291,15 @@ void Controller::ScheduleTransaction() {
                 }
                 else
                 {
-                    // std::cout << channel_id_ << " addr : " << it->addr << std::endl;
+                    // std::cout << "----------------------------------------------" << std::endl;
+                    // std::cout << "on ch, bg : " << cmd.Channel() << " " << cmd.Bankgroup()  << " input addr : " << it->addr << std::endl;
                     (*it).skewed_cycle = clk_ + config_.skewed_cycle;
-                    bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it);
+                    // bg_pims_[cmd.Bankgroup()].PrintAddress();
+                    bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it, cmd);
                     cmd_queue_.AddCommand(cmd);
+
+                    // if((*it).vector_transfer)
+                    //     std::cout << "address : " << cmd.hex_addr << " is read?? " << cmd.IsRead() << std::endl;
                     queue.erase(it); 
                     break;
                 }
@@ -301,7 +336,11 @@ void Controller::IssueCommand(const Command &cmd) {
             else
             {
                 if(bg_pims_[cmd.Bankgroup()].IsTransferTrans(it->second))
+                {
+                    // std::cout << "return vec addr : " << (it->second).addr << " transfer "<< (it->second).vector_transfer << std::endl;
                     return_queue_.push_back(it->second);
+
+                }
             }
             pending_rd_q_.erase(it);
             num_reads -= 1;

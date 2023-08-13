@@ -33,7 +33,7 @@ CommandQueue::CommandQueue(int channel_id, const Config& config,
     }
 }
 
-Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
+Command CommandQueue::GetCommandToIssue(std::vector<BGPIM>& bg_pims_) {
     for (int i = 0; i < num_queues_; i++) {
         auto& queue = GetNextQueue();
         // if we're refresing, skip the command queues that are involved
@@ -44,17 +44,23 @@ Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
         }
 
         auto cmd = GetFirstReadyInQueue(queue);
+        // if(cmd.hex_addr == 555953152)
+        //     std::cout << "fetching command, valid?? " << cmd.IsValid() << " Is Read? " << cmd.IsRead() << std::endl;
+
         if (cmd.IsValid()) {
             if(config_.PIM_enabled){
                 if(cmd.IsReadWrite()){
                     if(bg_pims_[cmd.Bankgroup()].CommandIssuable(cmd, clk_)){
                         bg_pims_[cmd.Bankgroup()].ReleaseCommand(cmd, clk_);
                         EraseRWCommand(cmd);
-
+                        // bg_pims_[cmd.Bankgroup()].PrintAddress();
+                        // std::cout << "release command : " << cmd.hex_addr << " is read? " << cmd.IsRead() << std::endl;
                         return cmd;
                     }
                     else
+                    {
                         return Command();
+                    }
                 }
                 return cmd;
             }
@@ -67,6 +73,8 @@ Command CommandQueue::GetCommandToIssue(std::vector<BGPIM> bg_pims_) {
             }
         }
     }
+                        // std::cout << "last command" << std::endl;
+
     return Command();
 }
 

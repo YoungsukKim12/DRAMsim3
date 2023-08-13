@@ -21,7 +21,6 @@ namespace dramsim3 {
 
 BGPIM::BGPIM()
 {
-
 }
 
 // if command has been issued, add it inside the accumulation register - is it needed?
@@ -32,7 +31,7 @@ BGPIM::BGPIM()
 // }
 
 // check whether requested command is able to issue, regarding the skewed cycle of the instruction inside PIM instruction queue
-bool BGPIM::CommandIssuable(Command cmd, uint64_t clk)
+bool BGPIM::CommandIssuable(Command& cmd, uint64_t clk)
 {
     for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
     {
@@ -43,16 +42,32 @@ bool BGPIM::CommandIssuable(Command cmd, uint64_t clk)
 }
 
 // erase command from the instruction buffer
-void BGPIM::ReleaseCommand(Command cmd, uint64_t clk)
+void BGPIM::ReleaseCommand(Command& cmd, uint64_t clk)
 {
     for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
     {
-        if(cmd.hex_addr == it->addr && it->skewed_cycle <= clk)
+        if(cmd.hex_addr == it->addr)
         {
             instruction_queue.erase(it);
-            break;
+            return;
         }
     }
+}
+
+// add PIM instruction to the PIM instruction queue
+void BGPIM::InsertPIMInst(Transaction trans, Command cmd)
+{
+    instruction_queue.push_back(trans);
+}
+
+void BGPIM::PrintAddress()
+{
+    // for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
+    // {
+    //     std::cout << "addr : " << it->addr << std::endl;
+    // }
+    // std::cout << "----------------------------------------------" << std::endl;
+    return;
 }
 
 // check whether requested transaction is r vector or not. If it is r vector, do nothing inside the controller
@@ -66,18 +81,14 @@ bool BGPIM::IsRVector(Transaction trans)
     return false;
 }
 
-// add PIM instruction to the PIM instruction queue
-void BGPIM::InsertPIMInst(Transaction trans)
-{
-    instruction_queue.push_back(trans);
-    // std::cout << "Insert addr : " << trans.addr << " r vector : " << trans.is_r_vec << std::endl;
-}
-
 // check cmd's address to determine if the transaction with the same address inside PIM instruction queue has its vector transfer bit marked as 1
 bool BGPIM::IsTransferTrans(Transaction trans)
 {
     if(trans.vector_transfer)
+    {
+    // std::cout << "inside bg pim : " << trans.addr << " " << trans.vector_transfer << std :: endl; 
         return true;
+    }
     return false;
 }
 

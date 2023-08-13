@@ -159,6 +159,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
 
         // dummy
         std::unordered_map<int, uint64_t> vector_transfer_address = ProfileAddresses(HBM_transaction[i]);
+        AddTransactionsToMemory(HBM_transaction[i], DIMM_transaction[i], HBM_vectors_left, DIMM_vectors_left, vector_transfer_address);
 
         while(pooling_count > 0 || nmp_buffer_queue > 0 || nmp_cycle_left > 0)
         {
@@ -182,7 +183,6 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
             }
 
             HeterogeneousMemoryClockTick();
-            AddTransactionsToMemory(HBM_transaction[i], DIMM_transaction[i], HBM_vectors_left, DIMM_vectors_left, vector_transfer_address);
 
             // ReadCallback() increments complete_transactions when rd is complete
             if(complete_transactions > 0)
@@ -204,7 +204,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
             // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
 
         }
-                std::cout << i << "/" << HBM_transaction.size() << " process finish" << std::endl;
+                // std::cout << i << "/" << HBM_transaction.size() << " process finish" << std::endl;
 
     }
     std::cout << clk_HBM << std::endl;
@@ -218,8 +218,8 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
 
     for(int i=0; i < (int)HBM_transaction.size() - 1; i++)
     {
-
-        std::cout << i << "/" << HBM_transaction.size() << " processed" << std::endl;
+        if(i%100 == 0)
+            std::cout << i << "/" << HBM_transaction.size() << " processed" << std::endl;
 
 
         int HBM_vectors_left = HBM_transaction[i].size();
@@ -278,7 +278,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
 
         }
-            std::cout << i << "/" << HBM_transaction.size() << " process finish" << std::endl;
+            // std::cout << i << "/" << HBM_transaction.size() << " process finish" << std::endl;
 
     }
     std::cout << clk_HBM << std::endl;
@@ -288,36 +288,40 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
     return;
 }
 
+// TODO : split function for NMP / HEAM
 void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address){
     // add transaction to HBM
     if(!(HBM_vectors_left <= 0))
     {
-        HBM_get_next_ = memory_system_HBM.WillAcceptTransaction(HBM_transaction[HBM_vectors_left-1], false);
+        int total_tras = HBM_transaction.size();
+        int curr_idx = total_tras-HBM_vectors_left;
+        HBM_get_next_ = memory_system_HBM.WillAcceptTransaction(HBM_transaction[curr_idx], false);
         if (HBM_get_next_) {
             bool vector_transfer = false;
             bool is_r_vec = false;
 
-            if(IsLastAddressInBankGroup(vector_transfer_address, HBM_transaction[HBM_vectors_left-1]))
+            if(IsLastAddressInBankGroup(vector_transfer_address, HBM_transaction[curr_idx]))
                vector_transfer = true;
  
             // check for even number of HBM vector
-            if(is_using_HEAM && HBM_vectors_left%2 == 0)
+            if(is_using_HEAM && HBM_vectors_left%2 == 1)
                 is_r_vec = true;
 
-            std::cout << "----- processing on HEAM -----" << std::endl;
-            std::cout << "\t hbm vecs left : " << HBM_vectors_left<< std::endl;
-            std::cout << " \t addr : " << HBM_transaction[HBM_vectors_left-1] << " / r_vec : "  << is_r_vec << " / vector transfer : " <<  vector_transfer <<  std::endl;
-            std::cout << "------------------------------\n" << std::endl;
+            // std::cout << "----- processing on HEAM -----" << std::endl;
+            // std::cout << "\t hbm vecs left : " << HBM_vectors_left<< std::endl;
+            // std::cout << " \t addr : " << HBM_transaction[curr_idx] << " / r_vec : "  << is_r_vec << " / vector transfer : " <<  vector_transfer <<  std::endl;
+            // std::cout << "------------------------------\n" << std::endl;
 
-            memory_system_HBM.AddTransaction(HBM_transaction[HBM_vectors_left-1], false, vector_transfer, is_r_vec);
+            memory_system_HBM.AddTransaction(HBM_transaction[curr_idx], false, vector_transfer, is_r_vec);
             if(!is_using_HEAM)
-                HBM_address_in_processing.push_back(HBM_transaction[HBM_vectors_left-1]);
+                HBM_address_in_processing.push_back(HBM_transaction[curr_idx]);
             else
             {
                 if(vector_transfer)
                 {
-                    HBM_address_in_processing.push_back(HBM_transaction[HBM_vectors_left-1]);
+                    HBM_address_in_processing.push_back(HBM_transaction[curr_idx]);
                     vec_transfers++;
+                    // std::cout << "transfer vec addr in emb op : " << HBM_transaction[curr_idx] << std::endl;
                 }
             }
                 
@@ -385,7 +389,7 @@ void TraceBasedCPUForHeterogeneousMemory::ClockTick(){
 
 void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_HBM(uint64_t addr)
 {
-    bool transaction_complete = UpdateInProcessTransactionList(addr, HBM_address_in_processing);
+    bool transaction_complete = UpdateInProcessTransactionList(addr, HBM_address_in_processing, true);
     if(transaction_complete)
         complete_transactions++;
     HBM_complete_addr = addr;
@@ -395,20 +399,25 @@ void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_HBM(uint64_t addr)
 
 void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_DIMM(uint64_t addr)
 {
-    bool transaction_complete = UpdateInProcessTransactionList(addr, DIMM_address_in_processing);
+    bool transaction_complete = UpdateInProcessTransactionList(addr, DIMM_address_in_processing, false);
     if(transaction_complete)
         complete_transactions++;
     DIMM_complete_addr = addr;
     // std::cout << "dimm complete : " << ++dimm_complete_count << std::endl;
 }
 
-bool TraceBasedCPUForHeterogeneousMemory::UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist)
+bool TraceBasedCPUForHeterogeneousMemory::UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm)
 {
     bool address_found=false;
     for (std::list<uint64_t>::iterator i=transactionlist.begin(); i!=transactionlist.end(); i++)
     {
        if(*i == addr)
+       {
            address_found=true;
+        //    if(hbm)
+        //     std::cout << "return complete address : " << addr << std::endl;
+            break;
+       }
     }
 
     // this logic is for considering duplicate address case
