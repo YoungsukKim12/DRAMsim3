@@ -112,6 +112,7 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     LoadTrace(trace_file);
 
     is_using_HEAM = true;
+    is_using_LUT = true;
     batch_size = 4;
 
     if(is_using_HEAM)
@@ -210,9 +211,6 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
                 // std::cout << i << "/" << HBM_transaction.size() << " process finish" << std::endl;
 
     }
-    std::cout << clk_HBM << std::endl;
-
-        //TODO : Debug HBM transaction vanishing
 
     return;
 }
@@ -220,10 +218,12 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
 void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
 
     int total_batch = (int)HBM_transaction.size()/batch_size;
+
+    std::cout << "total batch : " << total_batch << std::endl;
     for(int i=0; i < total_batch- 1; i++)
     {
         if(i%100 == 0)
-            std::cout << i*batch_size << "/" << HBM_transaction.size() << " processed" << std::endl;
+            std::cout << i << "/" << total_batch << " processed" << std::endl;
 
 
         std::vector<int> HBM_vectors_left;
@@ -246,10 +246,12 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             pooling_count += DIMM_vectors;
         }
 
-        // std::cout << "total transactions : " << pooling_count << std::endl;
         bool nmp_is_calculating = false;
         int nmp_cycle_left = add_cycle;
         int nmp_buffer_queue = 0;
+
+        // std::cout << "batch : " << start_index << " total transfer addrs : " << pooling_count << std::endl;
+
 
         int batch_tag = 0;
 
@@ -275,9 +277,21 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             }
 
             HeterogeneousMemoryClockTick();
-            AddTransactionsToMemory(HBM_transaction[start_index+batch_tag], DIMM_transaction[start_index+batch_tag], 
-                                        HBM_vectors_left[start_index+batch_tag], DIMM_vectors_left[start_index+batch_tag], vector_transfer_address[start_index+batch_tag], batch_tag);
-            batch_tag++;
+            if(batch_tag < batch_size)
+            {
+                // std::cout << HBM_vectors_left[batch_tag] << " "<< DIMM_vectors_left[batch_tag] << "  " << batch_tag << std::endl;
+                AddTransactionsToMemory(HBM_transaction[start_index+batch_tag], DIMM_transaction[start_index+batch_tag], 
+                                            HBM_vectors_left[batch_tag], DIMM_vectors_left[batch_tag], vector_transfer_address[batch_tag], 
+                                            batch_tag);
+                if((HBM_vectors_left[batch_tag] == 0) && (DIMM_vectors_left[batch_tag]==0))
+                    batch_tag++;
+            }
+            else
+            {
+                // HBM_vectors_left.clear();
+                // DIMM_vectors_left.clear();
+                // vector_transfer_address.clear();
+            }
 
             // ReadCallback() increments complete_transactions when rd is complete
             if(complete_transactions > 0)
@@ -294,14 +308,15 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
                 }
                 pooling_count -= complete_transactions;
                 complete_transactions = 0;
+            // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
+
             }                
             
-            // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
 
         }
 
     }
-    std::cout << clk_HBM << std::endl;
+    // std::cout << clk_HBM << std::endl;
 
         //TODO : Debug HBM transaction vanishing
 
@@ -313,19 +328,19 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(std::vector<ui
     // add transaction to HBM
     if(!(HBM_vectors_left <= 0))
     {
-        int total_tras = HBM_transaction.size();
-        int curr_idx = total_tras-HBM_vectors_left;
+        int total_trans = HBM_transaction.size();
+        int curr_idx = total_trans-HBM_vectors_left;
         HBM_get_next_ = memory_system_HBM.WillAcceptTransaction(HBM_transaction[curr_idx], false);
-        std::cout << "HBM get next " << HBM_get_next_ << std::endl;
         if (HBM_get_next_) {
             bool vector_transfer = false;
             bool is_r_vec = false;
 
             if(IsLastAddressInBankGroup(vector_transfer_address, HBM_transaction[curr_idx]))
                vector_transfer = true;
- 
+
+
             // check for even number of HBM vector
-            if(is_using_HEAM && HBM_vectors_left%2 == 1)
+            if(is_using_HEAM && is_using_LUT && HBM_vectors_left%2 == 1)
                 is_r_vec = true;
 
             // std::cout << "----- processing on HEAM -----" << std::endl;
@@ -353,6 +368,8 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(std::vector<ui
             }
                 
             HBM_vectors_left--;
+            //  std:: cout << "batch tag : " << batch_tag << " HBM vectors left : " << HBM_vectors_left << std::endl;
+
         }
     }
 
@@ -384,8 +401,17 @@ std::unordered_map<int, uint64_t> TraceBasedCPUForHeterogeneousMemory::ProfileAd
     for (const uint64_t& address : addresses) {
         int channel = GetChannel(address);
         int bankGroup = GetBankGroup(address);
-        if(idx%2 == 0)
-            lastAddressInBankGroup[channel*bankgroups + bankGroup] = address; // Storing the last address for each bank group
+        if(is_using_HEAM)
+        {
+            if(is_using_LUT)
+            {
+                if(idx%2==0)
+                    lastAddressInBankGroup[channel*bankgroups + bankGroup] = address; // Storing the last address for each bank group
+            }
+            else
+                lastAddressInBankGroup[channel*bankgroups + bankGroup] = address;
+            // std::cout << "vec transfer ?? " << std::endl;
+        }
         idx++;
     }
 

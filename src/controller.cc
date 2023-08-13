@@ -73,19 +73,6 @@ void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
 
-//         std::cout << channel_id_ << " vec size "<< read_queue_.size() << std::endl;
-
-//     int k = 0;
-//     for(auto it=read_queue_.begin(); it != read_queue_.end(); it++)
-//     {
-//         if(channel_id_ == 0)
-//             std::cout << it->addr << std::endl;
-//         k++;
-// //        std::cout << it->addr << std::endl;
-//     }
-//     std::cout << channel_id_ << " vec count "<< k<<std::endl;
-//     k=0;
-
     bool cmd_issued = false;
     Command cmd;
     if (channel_state_.IsRefreshWaiting()) {
@@ -95,15 +82,7 @@ void Controller::ClockTick() {
     // cannot find a refresh related command or there's no refresh
     if (!cmd.IsValid()) {
         cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
-
-        // if(!(cmd.hex_addr==0))
-            // std::cout << "command issued : " << cmd.hex_addr << " is valid ? " << cmd.IsValid() << std::endl;
-        // if(!(cmd.hex_addr == 0))
-        // std::cout << "cmd addr : " << cmd.hex_addr <<std::endl;
     }
-
-        // std:: cout << "valid command ? " << cmd.IsValid() << std::endl;
-
 
     if (cmd.IsValid()) {
 
@@ -115,7 +94,6 @@ void Controller::ClockTick() {
             second_cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
 
         if(!(second_cmd.hex_addr==0))
-            // std::cout << "second command issued : " << second_cmd.hex_addr << " is valid ? " << cmd.IsValid() << std::endl;
 
             if (second_cmd.IsValid()) {
                 if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
@@ -132,14 +110,6 @@ void Controller::ClockTick() {
             }
         }
     }
-    // if(read_queue_.size() > 0 || cmd.hex_addr != 0)
-    // {
-    // std::cout << "command issue complete on channel : " << channel_id_ << ", cmd addr : " << cmd.hex_addr << std::endl;
-    // std::cout << "total reads on channel : " << read_queue_.size() << std::endl;
-    // std::cout << "valid command? : " << cmd.IsValid() << std::endl;
-
-    // }
-
 
     // power updates pt 1
     for (int i = 0; i < config_.ranks; i++) {
@@ -190,11 +160,7 @@ void Controller::ClockTick() {
         }
     }
 
-    // std::cout << "command issue of refresh complete on channel : " << channel_id_ << std::endl;
-
     ScheduleTransaction();
-
-    // std::cout << "schedule transaction complete on channel : " << channel_id_ << "\n" << std::endl;
 
     clk_++;
     cmd_queue_.ClockTick();
@@ -242,7 +208,6 @@ bool Controller::AddTransaction(Transaction trans) {
                 unified_queue_.push_back(trans);
             } else {
                 read_queue_.push_back(trans);
-        // std::cout << "pim values! : " << trans.pim_values.skewed_cycle << trans.pim_values.is_r_vec << trans.pim_values.vector_transfer << std::endl;
 
                 if(trans.pim_values.vector_transfer)
                 {
@@ -285,24 +250,22 @@ void Controller::ScheduleTransaction() {
             if(config_.PIM_enabled){
                 if(bg_pims_[cmd.Bankgroup()].IsRVector(*it))
                 {
+                    // if(it->addr == 1009861120)
+                    //     std::cout << "hello!!!" << std::endl;
                     queue.erase(it);
-                    // std::cout << "channel "<< channel_id_ << " queue size "<< queue.size() << std::endl;
                     auto pending_rd_q_it = pending_rd_q_.find(it->addr);
-                    pending_rd_q_.erase(pending_rd_q_it);
+                    
+                    if(pending_rd_q_.count(it->addr) != 0)
+                        pending_rd_q_.erase(pending_rd_q_it);
                     break;
                 }
                 else
                 {
-                    // std::cout << "----------------------------------------------" << std::endl;
-                    // std::cout << "on ch, bg : " << cmd.Channel() << " " << cmd.Bankgroup()  << " input addr : " << it->addr << std::endl;
                     (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-                    // bg_pims_[cmd.Bankgroup()].PrintAddress();
                     bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it, cmd);
                     cmd_queue_.AddCommand(cmd);
-
-                    // if((*it).vector_transfer)
-                    //     std::cout << "address : " << cmd.hex_addr << " is read?? " << cmd.IsRead() << std::endl;
                     queue.erase(it); 
+
                     break;
                 }
             }else{
@@ -338,11 +301,7 @@ void Controller::IssueCommand(const Command &cmd) {
             else
             {
                 if(bg_pims_[cmd.Bankgroup()].IsTransferTrans(it->second))
-                {
-                    // std::cout << "return vec addr : " << (it->second).addr << " transfer "<< (it->second).vector_transfer << std::endl;
                     return_queue_.push_back(it->second);
-
-                }
             }
             pending_rd_q_.erase(it);
             num_reads -= 1;

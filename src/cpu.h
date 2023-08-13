@@ -147,6 +147,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int dimm_complete_count;
 
     bool is_using_HEAM;
+    bool is_using_LUT;
     int channels = 16;
     int bankgroups = 4;
     int vec_transfers = 0;
