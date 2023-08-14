@@ -203,6 +203,11 @@ bool Controller::AddTransaction(Transaction trans) {
             return true;
         }
         pending_rd_q_.insert(std::make_pair(trans.addr, trans));
+        // auto num_reads = pending_rd_q_.count(trans.addr);
+        // if(trans.addr == 1009861120)
+        //     std::cout << "adding addr on clk " << clk_ << " num reads : " << num_reads << std::endl;
+
+
         if (pending_rd_q_.count(trans.addr) == 1) {
             if (is_unified_queue_) {
                 unified_queue_.push_back(trans);
@@ -250,17 +255,33 @@ void Controller::ScheduleTransaction() {
             if(config_.PIM_enabled){
                 if(bg_pims_[cmd.Bankgroup()].IsRVector(*it))
                 {
-                    // if(it->addr == 1009861120)
-                    //     std::cout << "hello!!!" << std::endl;
-                    queue.erase(it);
+                    // std::cout << "erase addr on clk " << clk_ << " addr : " << it->addr << std::endl;
+                    // auto num_reads = pending_rd_q_.count(1009861120);
+                    // std::cout << "find addr on clk " << clk_ << " , num reads : " << num_reads << std::endl;
+
+                    // std::cout << "pending_rd_q size : " << pending_rd_q_.size() << std::endl;
                     auto pending_rd_q_it = pending_rd_q_.find(it->addr);
                     
                     if(pending_rd_q_.count(it->addr) != 0)
                         pending_rd_q_.erase(pending_rd_q_it);
+
+                    // std::cout << "pending_rd_q size after erase : " << pending_rd_q_.size() << std::endl;
+
+
+                    queue.erase(it);
+
+                        // auto num_reads_2 = pending_rd_q_.count(1009861120);
+                        // std::cout << "find addr on clk " << clk_ << " , num reads : " << num_reads_2 << std::endl;
+
+                    // if(num_reads_2 != num_reads)
+                    //     pending_rd_q_.push_back(1009861120)
+
                     break;
                 }
                 else
                 {
+                    // if(it->addr == 1009861120)
+                    //     std::cout << "hello!!!" << std::endl;
                     (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
                     bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it, cmd);
                     cmd_queue_.AddCommand(cmd);
@@ -288,10 +309,13 @@ void Controller::IssueCommand(const Command &cmd) {
     // if read/write, update pending queue and return queue
     if (cmd.IsRead()) {
         auto num_reads = pending_rd_q_.count(cmd.hex_addr);
+        // if(cmd.hex_addr == 1009861120)
+            // std::cout << "issuing addr on clk " << clk_ << " , num reads : " << num_reads << std::endl;
         if (num_reads == 0) {
             std::cerr << cmd.hex_addr << " not in read queue! " << std::endl;
             exit(1);
         }
+
         // if there are multiple reads pending return them all
         while (num_reads > 0) {
             auto it = pending_rd_q_.find(cmd.hex_addr);

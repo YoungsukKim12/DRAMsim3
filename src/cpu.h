@@ -119,6 +119,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     std::unordered_map<int, uint64_t> ProfileAddresses(const std::vector<uint64_t>& addresses);
     bool IsLastAddressInBankGroup(const std::unordered_map<int, uint64_t>& lastAddressInBankGroup, uint64_t address);
     int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
+    int GetBatchInformation(int batch_start_index, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
 
    private:
     MemorySystem memory_system_HBM;

@@ -112,8 +112,8 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     LoadTrace(trace_file);
 
     is_using_HEAM = true;
-    is_using_LUT = true;
-    batch_size = 4;
+    is_using_LUT = false;
+    batch_size = 2;
 
     if(is_using_HEAM)
         RunHEAM();
@@ -215,6 +215,25 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
     return;
 }
 
+int TraceBasedCPUForHeterogeneousMemory::GetBatchInformation(int batch_start_index, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address){
+    int pooling_count = 0;
+    for(int i=0; i < batch_size; i++)
+    {
+        int HBM_vectors = HBM_transaction[batch_start_index+i].size();
+        int DIMM_vectors = DIMM_transaction[batch_start_index+i].size();
+        HBM_vectors_left.push_back(HBM_vectors);
+        DIMM_vectors_left.push_back(DIMM_vectors);
+        std::unordered_map<int, uint64_t> profiled_transfers = ProfileAddresses(HBM_transaction[batch_start_index+i]);
+        int total_transfers = GetTotalPIMTransfers(profiled_transfers);
+
+        vector_transfer_address.push_back(profiled_transfers);
+        pooling_count += total_transfers;
+        pooling_count += DIMM_vectors;
+    }
+
+    return pooling_count;
+}
+
 void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
 
     int total_batch = (int)HBM_transaction.size()/batch_size;
@@ -225,32 +244,18 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
         if(i%100 == 0)
             std::cout << i << "/" << total_batch << " processed" << std::endl;
 
-
         std::vector<int> HBM_vectors_left;
         std::vector<int> DIMM_vectors_left;
         std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address;
-        int pooling_count = 0;
+        int batch_start_index = i*batch_size;
+        int pooling_count = GetBatchInformation(batch_start_index, HBM_vectors_left, DIMM_vectors_left, vector_transfer_address);
 
-        int start_index = i*batch_size;
-        for(int j=0; j < batch_size; j++)
-        {
-            int HBM_vectors = HBM_transaction[start_index+j].size();
-            int DIMM_vectors = DIMM_transaction[start_index+j].size();
-            HBM_vectors_left.push_back(HBM_vectors);
-            DIMM_vectors_left.push_back(DIMM_vectors);
-            std::unordered_map<int, uint64_t> profiled_transfers = ProfileAddresses(HBM_transaction[start_index+j]);
-            int total_transfers = GetTotalPIMTransfers(profiled_transfers);
-
-            vector_transfer_address.push_back(profiled_transfers);
-            pooling_count += total_transfers;
-            pooling_count += DIMM_vectors;
-        }
 
         bool nmp_is_calculating = false;
         int nmp_cycle_left = add_cycle;
         int nmp_buffer_queue = 0;
 
-        // std::cout << "batch : " << start_index << " total transfer addrs : " << pooling_count << std::endl;
+        // std::cout << "batch : " << batch_start_index << " total transfer addrs : " << pooling_count << std::endl;
 
 
         int batch_tag = 0;
@@ -280,7 +285,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             if(batch_tag < batch_size)
             {
                 // std::cout << HBM_vectors_left[batch_tag] << " "<< DIMM_vectors_left[batch_tag] << "  " << batch_tag << std::endl;
-                AddTransactionsToMemory(HBM_transaction[start_index+batch_tag], DIMM_transaction[start_index+batch_tag], 
+                AddTransactionsToMemory(HBM_transaction[batch_start_index+batch_tag], DIMM_transaction[batch_start_index+batch_tag], 
                                             HBM_vectors_left[batch_tag], DIMM_vectors_left[batch_tag], vector_transfer_address[batch_tag], 
                                             batch_tag);
                 if((HBM_vectors_left[batch_tag] == 0) && (DIMM_vectors_left[batch_tag]==0))
