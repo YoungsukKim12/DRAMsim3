@@ -112,24 +112,29 @@ struct PimValues {
         : skewed_cycle(0), 
           vector_transfer(false), 
           is_r_vec(false), 
-          batch_tag(false) {} // Default constructor
+          batch_tag(false),
+          decode_cycle(0) {} // Default constructor
     
     PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, int batchTag)
         : skewed_cycle(skewedCycle), 
           vector_transfer(vectorTransfer), 
           is_r_vec(isRVec), 
-          batch_tag(batchTag) {} // Parameterized constructor
+          batch_tag(batchTag),
+          decode_cycle(0) {} // Parameterized constructor
 
     PimValues(const PimValues& pim_values)
         : skewed_cycle(pim_values.skewed_cycle), 
           vector_transfer(pim_values.vector_transfer), 
           is_r_vec(pim_values.is_r_vec), 
-          batch_tag(pim_values.batch_tag) {} // Parameterized constructor
+          batch_tag(pim_values.batch_tag),
+          decode_cycle(pim_values.decode_cycle) {} // Parameterized constructor
 
     uint64_t skewed_cycle;
     bool vector_transfer;
     bool is_r_vec;
     int batch_tag;
+    uint64_t decode_cycle;
+
 };
 
 struct Transaction {

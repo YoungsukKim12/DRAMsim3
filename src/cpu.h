@@ -111,7 +111,10 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void RunNMP();
     void RunHEAM();
     void LoadTrace(string filename);
-    void AddTransactionsToMemory(std::vector<uint64_t> HBM_transaction, std::vector<uint64_t> DIMM_transaction, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address, int batch_tag);
+    void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
+    void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
+    void AddTransactionsToDIMM(int batch_start_index, int bat_tag, int& DIMM_vectors_left);
+    void AddTransactionsToHBM(int batch_start_index, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
     bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
     void HeterogeneousMemoryClockTick();
     int GetBankGroup(uint64_t address);

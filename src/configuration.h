@@ -137,6 +137,9 @@ class Config {
     // PIM parameters
     bool PIM_enabled;
     uint64_t skewed_cycle;
+    int batch_size;
+    int decode_cycle;
+    int pim_cycle;
 
     int epoch_period;
     int output_level;

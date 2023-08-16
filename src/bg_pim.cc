@@ -1,41 +1,35 @@
 #include "bg_pim.h"
+// #include <algorithm>
 
 namespace dramsim3 {
 
-// TODO
-// 1. add skewed cycle & vector transfer bit in Transaction Class - complete
-// 2. add PIM_enabled inside configuration - complete
-// 3. add vector_transfer marking logic at the NMP - complete
-// -------------- Makefile Debugging In Progress ----------------- // -> complete!
-
-// 4. fix the updateState, updateTiming logic -- In Progress!!!
-
-// 5. write PIM logics
-    // if not isRVec -> add command to the command queue, add the transaction inside instruction queue - complete
-    // if command is issuable, issue the command - complete
-    // if the issued command is the transfer vector, add it inside the return queue - complete
-    // check whether PIM has been complete when calling ReturnDoneTrans - not necessary
-    // add timing for PIM when using PIM - not necessary
-
-    // need to debug...
-
-BGPIM::BGPIM()
+BGPIM::BGPIM(const Config &config)
+    : config_(config)
 {
+    batch_size = config_.batch_size;
+    pim_cycle = config_.pim_cycle;
+    decode_cycle = config_.decode_cycle;
+    for(int i=0; i< config_.batch_size; i++)
+    {
+        pim_cycle_left.push_back(0);
+    }
 }
 
-// if command has been issued, add it inside the accumulation register - is it needed?
-// it might be sufficient to just check vector transfer command
-// void BGPIM::ClockTick()
-// {
-
-// }
+BGPIM::ClockTick()
+{
+    for(int i=0; i< config_.batch_size; i++)
+    {
+        if(pim_cycle_left[i] > 0)
+            pim_cycle_left[i]--;
+    }
+}
 
 // check whether requested command is able to issue, regarding the skewed cycle of the instruction inside PIM instruction queue
 bool BGPIM::CommandIssuable(Command& cmd, uint64_t clk)
 {
     for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
     {
-        if(cmd.hex_addr == it->addr && cmd.IsReadWrite() && (it->pim_values).skewed_cycle <= clk)
+        if(cmd.hex_addr == it->addr && cmd.IsReadWrite() && std::max((it->pim_values).skewed_cycle,(it->pim_values).decode_cycle) <= clk)
             return true;
     }
     return false;
@@ -48,6 +42,7 @@ void BGPIM::ReleaseCommand(Command& cmd, uint64_t clk)
     {
         if(cmd.hex_addr == it->addr)
         {
+            pim_cycle_left[cmd.Bankgroup()] = pim_cycle;
             instruction_queue.erase(it);
             return;
         }

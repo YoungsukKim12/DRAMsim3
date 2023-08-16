@@ -247,6 +247,9 @@ void Config::InitSystemParams() {
     // PIM parameters
     PIM_enabled = reader.GetBoolean("system", "PIM_enabled", false);
     skewed_cycle = GetInteger("system", "skewed_cycle", 64);
+    decode_cycle = GetInteger("system", "decode_cycle", 2);
+    pim_cycle = GetInteger("system", "pim_cycle", 2);
+    batch_size = GetInteger("system", "batch_size", 2);
     // std::cout << "skewed cycle : "<< skewed_cycle << std::endl;
     return;
 }
