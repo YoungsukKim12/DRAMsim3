@@ -347,6 +347,9 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToHBM(int batch_start_i
         PimValues pim_values(0, vector_transfer, is_r_vec, batch_tag);
         memory_system_HBM.AddTransaction(target_addr, false, pim_values);
 
+        // if(vector_transfer)
+        //     std::cout << " \t addr : " << HBM_transaction[batch_start_index+batch_tag][curr_idx] << " / r_vec : "  << is_r_vec << " / vector transfer : " <<  vector_transfer <<  " batch tag : " << batch_tag << std::endl;
+
         // std::cout << "----- processing on HEAM -----" << std::endl;
         // std::cout << "\t hbm vecs left : " << HBM_vectors_left<< std::endl;
         // std::cout << " \t addr : " << HBM_transaction[batch_start_index+batch_tag][curr_idx] << " / r_vec : "  << is_r_vec << " / vector transfer : " <<  vector_transfer <<  std::endl;
@@ -362,6 +365,8 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToHBM(int batch_start_i
                 // vec_transfers++;
         }
         HBM_vectors_left--;
+
+        // std::cout << "add transaction to HBM" << std::endl;
     }
 }
 

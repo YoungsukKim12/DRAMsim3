@@ -20,7 +20,9 @@ class CommandQueue {
    public:
     CommandQueue(int channel_id, const Config& config,
                  const ChannelState& channel_state, SimpleStats& simple_stats);
-    Command GetCommandToIssue(std::vector<BGPIM>& bg_pims_);
+    Command GetCommandToIssue();
+    Command GetSecondCommandToIssue();
+    void EraseSecondRWCommand(Command cmd);
     Command FinishRefresh();
     void ClockTick() { clk_ += 1; };
     bool WillAcceptCommand(int rank, int bankgroup, int bank) const;

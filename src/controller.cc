@@ -59,9 +59,43 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
                 simple_stats_.Increment("num_reads_done");
                 simple_stats_.AddValue("read_latency", clk_ - it->added_cycle);
             }
-            auto pair = std::make_pair(it->addr, it->is_write);
-            it = return_queue_.erase(it);
-            return pair;
+            if(config_.PIM_enabled)
+            {
+                Command cmd = TransToCommand(*it);
+                // std::cout<< "Command Done!" << std::endl;
+                BGPIM& bg_pim = bg_pims_[cmd.Bankgroup()];
+                if(bg_pim.IsTransferTrans(*it))
+                {
+                    if(!bg_pim.LastAdditionInProgress(*it))
+                    {
+                        // std::cout << "addr : " << it->addr << std::endl;
+                        bg_pim.AddPIMCycle(*it);
+                    }
+
+                    if(bg_pim.PIMCycleCompleted(*it))
+                    {
+                        bg_pim.LastAdditionComplete(*it);
+                        bg_pim.EraseFromReadQueue(*it);
+                        auto pair = std::make_pair(it->addr, it->is_write);
+                        it = return_queue_.erase(it);
+                        return pair;
+                    }
+                    return std::make_pair(-1, -1);
+                }
+                else
+                {
+                    bg_pim.AddPIMCycle(*it);
+                    bg_pim.EraseFromReadQueue(*it);
+                    it = return_queue_.erase(it);
+                    return std::make_pair(-1, -1);
+                }
+            }
+            else
+            {
+                auto pair = std::make_pair(it->addr, it->is_write);
+                it = return_queue_.erase(it);
+                return pair;
+            }
         } else {
             ++it;
         }
@@ -72,6 +106,12 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
 void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
+    // std::cout << "tick start!" << std::endl;
+    for(size_t i=0; i<bg_pims_.size();i++)
+    {
+        bg_pims_[i].ClockTick();
+    }
+    // std::cout << "tick end!" << std::endl;
 
     bool cmd_issued = false;
     Command cmd;
@@ -81,7 +121,11 @@ void Controller::ClockTick() {
 
     // cannot find a refresh related command or there's no refresh
     if (!cmd.IsValid()) {
-        cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
+            // std::cout << "cmd issue start!" << std::endl;
+
+        cmd = cmd_queue_.GetCommandToIssue();
+            // std::cout << "cmd issue end!" << std::endl;
+
     }
 
     if (cmd.IsValid()) {
@@ -91,19 +135,14 @@ void Controller::ClockTick() {
 
         if (config_.enable_hbm_dual_cmd) {
             Command second_cmd;
-            second_cmd = cmd_queue_.GetCommandToIssue(bg_pims_);
+            second_cmd = cmd_queue_.GetSecondCommandToIssue();
 
             if (second_cmd.IsValid()) {
                 if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
+                    if(second_cmd.IsReadWrite())
+                        cmd_queue_.EraseSecondRWCommand(second_cmd);
                     IssueCommand(second_cmd);
                     simple_stats_.Increment("hbm_dual_cmds");
-                }
-                else
-                {
-                    std::cout << "add command again! "<< std::endl;
-                    cmd_queue_.AddCommand(second_cmd);
-                    std::cout << "add command finish! "<< std::endl;
-
                 }
             }
         }
@@ -158,6 +197,7 @@ void Controller::ClockTick() {
         }
     }
 
+    // std::cout << "schedule!" << std::endl;
     ScheduleTransaction();
 
     clk_++;
@@ -201,13 +241,17 @@ bool Controller::AddTransaction(Transaction trans) {
             return true;
         }
         pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-        if (pending_rd_q_.count(trans.addr) == 1) {
+
+    // if(trans.pim_values.vector_transfer)
+    //     std::cout << "!addr : " << trans.addr << " pending_rd_q size " << pending_rd_q_.count(trans.addr) << std::endl;
+
+        // if (pending_rd_q_.count(trans.addr) == 1) {
             if (is_unified_queue_) {
                 unified_queue_.push_back(trans);
             } else {
                 read_queue_.push_back(trans);
             }
-        }
+        // }
         return true;
     }
 }
@@ -240,6 +284,7 @@ void Controller::ScheduleTransaction() {
             }
 
             if(config_.PIM_enabled){
+
                 if(bg_pims_[cmd.Bankgroup()].IsRVector(*it))
                 {
                     auto pending_rd_q_it = pending_rd_q_.find(it->addr);
@@ -251,11 +296,31 @@ void Controller::ScheduleTransaction() {
                 }
                 else
                 {
-                    (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-                    (*it).pim_values.decode_cycle = clk_ + config_.decode_cycle;
-                    bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it, cmd);
-                    cmd_queue_.AddCommand(cmd);
-                    queue.erase(it); 
+                        // std::cout<< "add command!" << std::endl;
+                    // if(it->pim_values.vector_transfer)
+                    //     std::cout << "addr : " << it->addr << std::endl;
+                    if(bg_pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
+                    {
+                        // std::cout<< "address in queue!" << std::endl;
+                        if(bg_pims_[cmd.Bankgroup()].CommandIssuable(*it, clk_))
+                        {
+                            // std::cout<< "address issuable!" << std::endl;
+                            cmd_queue_.AddCommand(cmd);
+                            queue.erase(it); 
+                        }
+                    }
+                    else
+                    {
+                        // std::cout<< "insert to queue!" << std::endl;
+
+                        (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+                        (*it).pim_values.decode_cycle = clk_ + config_.decode_cycle;
+                        // std::cout<< "insert to queue ready!" << std::endl;
+
+                        bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it);
+                        // std::cout<< "insert to queue end!" << std::endl;
+
+                    }
 
                     break;
                 }
@@ -285,19 +350,13 @@ void Controller::IssueCommand(const Command &cmd) {
         }
 
         // if there are multiple reads pending return them all
-        while (num_reads > 0) {
+        // while (num_reads > 0) {
             auto it = pending_rd_q_.find(cmd.hex_addr);
             it->second.complete_cycle = clk_ + config_.read_delay;
-            if(!config_.PIM_enabled)
-                return_queue_.push_back(it->second);
-            else
-            {
-                if(bg_pims_[cmd.Bankgroup()].IsTransferTrans(it->second))
-                    return_queue_.push_back(it->second);
-            }
+            return_queue_.push_back(it->second);
             pending_rd_q_.erase(it);
             num_reads -= 1;
-        }
+        // }
     } else if (cmd.IsWrite()) {
         // there should be only 1 write to the same location at a time
         auto it = pending_wr_q_.find(cmd.hex_addr);

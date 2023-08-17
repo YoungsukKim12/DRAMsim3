@@ -33,7 +33,7 @@ CommandQueue::CommandQueue(int channel_id, const Config& config,
     }
 }
 
-Command CommandQueue::GetCommandToIssue(std::vector<BGPIM>& bg_pims_) {
+Command CommandQueue::GetCommandToIssue() {
     for (int i = 0; i < num_queues_; i++) {
         auto& queue = GetNextQueue();
         // if we're refresing, skip the command queues that are involved
@@ -46,29 +46,38 @@ Command CommandQueue::GetCommandToIssue(std::vector<BGPIM>& bg_pims_) {
         auto cmd = GetFirstReadyInQueue(queue);
 
         if (cmd.IsValid()) {
-            if(config_.PIM_enabled){
-                if(cmd.IsReadWrite()){
-                    if(bg_pims_[cmd.Bankgroup()].CommandIssuable(cmd, clk_)){
-                        bg_pims_[cmd.Bankgroup()].ReleaseCommand(cmd, clk_);
-                        EraseRWCommand(cmd);
-                        return cmd;
-                    }
-                    else
-                        return Command();
-                }
-                return cmd;
+            if (cmd.IsReadWrite()) {
+                EraseRWCommand(cmd);
             }
-            else
-            {
-                if (cmd.IsReadWrite()) {
-                    EraseRWCommand(cmd);
-                }
-                return cmd;
-            }
+            return cmd;
         }
     }
 
     return Command();
+}
+
+Command CommandQueue::GetSecondCommandToIssue() {
+    for (int i = 0; i < num_queues_; i++) {
+        auto& queue = GetNextQueue();
+        // if we're refresing, skip the command queues that are involved
+        if (is_in_ref_) {
+            if (ref_q_indices_.find(queue_idx_) != ref_q_indices_.end()) {
+                continue;
+            }
+        }
+
+        auto cmd = GetFirstReadyInQueue(queue);
+
+        if (cmd.IsValid()) {
+            return cmd;
+        }
+    }
+
+    return Command();
+}
+
+void CommandQueue::EraseSecondRWCommand(Command cmd){
+    EraseRWCommand(cmd);
 }
 
 Command CommandQueue::FinishRefresh() {
