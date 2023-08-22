@@ -119,7 +119,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void HeterogeneousMemoryClockTick();
     int GetBankGroup(uint64_t address);
     int GetChannel(uint64_t address);
-    std::unordered_map<int, uint64_t> ProfileAddresses(const std::vector<uint64_t>& addresses);
+    std::unordered_map<int, uint64_t> ProfileAddresses(int batch_start_index, int batch_index);
     bool IsLastAddressInBankGroup(const std::unordered_map<int, uint64_t>& lastAddressInBankGroup, uint64_t address);
     int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
     int GetBatchInformation(int batch_start_index, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
@@ -139,6 +139,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
 
     std::vector<std::vector<uint64_t>> HBM_transaction;
     std::vector<std::vector<uint64_t>> DIMM_transaction;
+    std::vector<std::vector<char>> HBM_transaction_vec_class;
+    std::vector<std::vector<char>> DIMM_transaction_vec_class;
 
     std::list<uint64_t> HBM_address_in_processing;
     std::list<uint64_t> DIMM_address_in_processing;
@@ -156,6 +158,10 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int bankgroups = 4;
     int vec_transfers = 0;
     int batch_size = 0;
+    std::string addrmapping;
+    std::vector<int> loads_per_bg;
+    std::vector<int> loads_per_bg_for_q;
+
 };
 
 

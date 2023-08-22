@@ -1,5 +1,5 @@
-#ifndef __BG_PIM
-#define __BG_PIM
+#ifndef __PIM
+#define __PIM
 
 #include <vector>
 #include "common.h"
@@ -7,9 +7,9 @@
 
 namespace dramsim3 {
 
-class BGPIM {
+class PIM {
     public:
-        BGPIM(const Config &config);
+        PIM(const Config &config);
         bool CommandIssuable(Transaction trans, uint64_t clk);
         bool IsRVector(Transaction trans);
         void InsertPIMInst(Transaction trans);

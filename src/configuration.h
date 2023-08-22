@@ -134,7 +134,8 @@ class Config {
     bool aggressive_precharging_enabled;
     bool enable_hbm_dual_cmd;
 
-    // PIM parameters
+    // NMP, PIM parameters
+    bool NMP_enabled;
     bool PIM_enabled;
     uint64_t skewed_cycle;
     int batch_size;

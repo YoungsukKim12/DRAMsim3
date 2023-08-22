@@ -245,6 +245,7 @@ void Config::InitSystemParams() {
         reader.GetBoolean("system", "aggressive_precharging_enabled", false);
 
     // PIM parameters
+    NMP_enabled = reader.GetBoolean("system", "NMP_enabled", false);
     PIM_enabled = reader.GetBoolean("system", "PIM_enabled", false);
     skewed_cycle = GetInteger("system", "skewed_cycle", 64);
     decode_cycle = GetInteger("system", "decode_cycle", 2);
@@ -401,6 +402,10 @@ void Config::SetAddressMapping() {
     ba_pos = field_pos.at("ba");
     ro_pos = field_pos.at("ro");
     co_pos = field_pos.at("co");
+
+    // std::cout << "ch : " << ch_pos << " ra : " << ra_pos << " bg : " << bg_pos << " ba : " << ba_pos << " ro : " << ro_pos << " co : " << co_pos << std::endl;
+    // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << std::endl;
+
 
     ch_mask = (1 << field_widths.at("ch")) - 1;
     ra_mask = (1 << field_widths.at("ra")) - 1;

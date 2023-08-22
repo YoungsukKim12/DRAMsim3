@@ -112,10 +112,19 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     LoadTrace(trace_file);
 
     is_using_HEAM = true;
-    is_using_LUT = false;
+    is_using_LUT = true;
     batch_size = 2;
     if(!is_using_HEAM)
         batch_size=1;
+
+    addrmapping = "rorabgbachco";
+    // rorababgchco
+
+    for(int i=0; i < channels*bankgroups; i++)
+    {
+        loads_per_bg.push_back(0);
+        loads_per_bg_for_q.push_back(0);
+    }
 
     if(is_using_HEAM)
         RunHEAM();
@@ -124,12 +133,19 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     std::cout << clk_HBM << std::endl;
 }
 
+//rorabgbachco
 int TraceBasedCPUForHeterogeneousMemory::GetBankGroup(uint64_t address) {
-  return (address >> 4) & 0x3; // Extracting the 4th and 5th bits
+    if(addrmapping == "rorabgbachco")
+        return (address >> 10) & 0x3; // Extracting the 4th and 5th bits
+    else if(addrmapping == "rorababgchco")
+         return (address >> 8) & 0x3;
 }
-
+//rorabgbachco
 int TraceBasedCPUForHeterogeneousMemory::GetChannel(uint64_t address) {
-    return (address >> 8) & 0x3; // Extracting the 8th and 9th bits
+    if(addrmapping == "rorabgbachco")
+        return (address >> 5) & 0x7; // Extracting the 8th and 9th bits
+    else if(addrmapping == "rorababgchco")
+        return (address >> 5) & 0x7;
 }
 
 void TraceBasedCPUForHeterogeneousMemory::HeterogeneousMemoryClockTick(){
@@ -160,7 +176,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunNMP() {
         int nmp_buffer_queue = 0;
 
         // dummy
-        std::unordered_map<int, uint64_t> vector_transfer_address = ProfileAddresses(HBM_transaction[i]);
+        std::unordered_map<int, uint64_t> vector_transfer_address = ProfileAddresses(i, 0);
 
         while(pooling_count > 0 || nmp_buffer_queue > 0 || nmp_cycle_left > 0)
         {
@@ -218,7 +234,7 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
 
     int total_batch = (int)HBM_transaction.size()/batch_size;
     for(int i=0; i < total_batch-1; i++)
-    // for(int i=0; i< 3; i++)
+    // for(int i=0; i< 1; i++)
 
     {
         // if(i%100 == 0)
@@ -278,7 +294,19 @@ void TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             // std::cout << pooling_count << " " << nmp_buffer_queue << " " << nmp_cycle_left << std::endl;
             }                
         }
+
+        for(int i=0; i < loads_per_bg.size(); i++)
+        {
+            // std::cout << "bg : " << i << " " << loads_per_bg[i] << std::endl;
+            // std::cout << "q bg : " << i << " " << loads_per_bg_for_q[i] << std::endl;
+
+            loads_per_bg[i] = 0;
+            loads_per_bg_for_q[i] = 0;
+        }
+
     }
+
+
         //TODO : Debug HBM transaction vanishing
 
     return;
@@ -333,18 +361,24 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToHBM(int batch_start_i
     int curr_idx = total_trans-HBM_vectors_left;
 
     uint64_t target_addr = HBM_transaction[batch_start_index+batch_tag][curr_idx];
+    char target_addr_vec_class = HBM_transaction_vec_class[batch_start_index+batch_tag][curr_idx];
 
     HBM_get_next_ = memory_system_HBM.WillAcceptTransaction(target_addr, false);
     if (HBM_get_next_) {
         bool vector_transfer = false;
         bool is_r_vec = false;
 
+        loads_per_bg[GetChannel(target_addr)*bankgroups + GetBankGroup(target_addr)] += 1;
+
         if(IsLastAddressInBankGroup(vector_transfer_address, target_addr))
             vector_transfer = true;
-        if(is_using_HEAM && is_using_LUT && HBM_vectors_left%2 == 1)
+        if(is_using_HEAM && is_using_LUT && target_addr_vec_class == 'r')
             is_r_vec = true;
 
-        PimValues pim_values(0, vector_transfer, is_r_vec, batch_tag);
+        if(!is_r_vec)
+            loads_per_bg_for_q[GetChannel(target_addr)*bankgroups + GetBankGroup(target_addr)] += 1;
+
+        PimValues pim_values(0, vector_transfer, is_r_vec, false, batch_tag);
         memory_system_HBM.AddTransaction(target_addr, false, pim_values);
 
         // if(vector_transfer)
@@ -362,11 +396,8 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToHBM(int batch_start_i
         {
             if(vector_transfer)
                 HBM_address_in_processing.push_back(target_addr);
-                // vec_transfers++;
         }
         HBM_vectors_left--;
-
-        // std::cout << "add transaction to HBM" << std::endl;
     }
 }
 
@@ -383,7 +414,7 @@ int TraceBasedCPUForHeterogeneousMemory::GetBatchInformation(int batch_start_ind
         int DIMM_vectors = DIMM_transaction[batch_start_index+i].size();
         HBM_vectors_left.push_back(HBM_vectors);
         DIMM_vectors_left.push_back(DIMM_vectors);
-        std::unordered_map<int, uint64_t> profiled_transfers = ProfileAddresses(HBM_transaction[batch_start_index+i]);
+        std::unordered_map<int, uint64_t> profiled_transfers = ProfileAddresses(batch_start_index, i);
         int total_transfers = GetTotalPIMTransfers(profiled_transfers);
 
         vector_transfer_address.push_back(profiled_transfers);
@@ -394,7 +425,7 @@ int TraceBasedCPUForHeterogeneousMemory::GetBatchInformation(int batch_start_ind
     return pooling_count;
 }
 
-std::unordered_map<int, uint64_t> TraceBasedCPUForHeterogeneousMemory::ProfileAddresses(const std::vector<uint64_t>& addresses) {
+std::unordered_map<int, uint64_t> TraceBasedCPUForHeterogeneousMemory::ProfileAddresses(int batch_start_index, int batch_index) {
     std::unordered_map<int, uint64_t> lastAddressInBankGroup;
 
     for(int i=0; i < channels*bankgroups; i++)
@@ -402,21 +433,17 @@ std::unordered_map<int, uint64_t> TraceBasedCPUForHeterogeneousMemory::ProfileAd
         lastAddressInBankGroup[i] = 0;
     }
 
-    int idx = 0;
-    for (const uint64_t& address : addresses) {
+    for (int i = 0; i < HBM_transaction[batch_start_index+batch_index].size(); i++) {
+        uint64_t address = HBM_transaction[batch_start_index+batch_index][i];
         int channel = GetChannel(address);
         int bankGroup = GetBankGroup(address);
-        if(is_using_HEAM)
-        {
-            if(is_using_LUT)
-            {
-                if(idx%2==0)
-                    lastAddressInBankGroup[channel*bankgroups + bankGroup] = address; // Storing the last address for each bank group
-            }
-            else
-                lastAddressInBankGroup[channel*bankgroups + bankGroup] = address;
+
+        if(is_using_HEAM && is_using_LUT) {
+            if(HBM_transaction_vec_class[batch_start_index+batch_index][i] != 'r') // check only q vectors
+                lastAddressInBankGroup[channel*bankgroups + bankGroup] = address; // Storing the last address for each bank group
         }
-        idx++;
+        else
+            lastAddressInBankGroup[channel*bankgroups + bankGroup] = address;
     }
 
   return lastAddressInBankGroup;
@@ -506,9 +533,15 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
     HBM_transaction[count].clear();
     DIMM_transaction[count].clear();
 
+    std::vector<char> HBM_pooling_vec_class;
+    std::vector<char> DIMM_pooling_vec_class;
+    HBM_transaction_vec_class.push_back(HBM_pooling_vec_class);
+    DIMM_transaction_vec_class.push_back(DIMM_pooling_vec_class);
+    HBM_transaction_vec_class[count].clear();
+    DIMM_transaction_vec_class[count].clear();
+
     std::cout << "Using following trace file : " << filename << std::endl;
 
-    bool last_was_DIMM = false;
     bool is_collision = false;
     if(filename.find("col_"))
         is_collision = true;
@@ -526,11 +559,20 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
                 DIMM_transaction.push_back(DIMM_pooling);
                 HBM_transaction[count].clear();
                 DIMM_transaction[count].clear();
+
+                std::vector<char> HBM_pooling_vec_class;
+                std::vector<char> DIMM_pooling_vec_class;
+                HBM_transaction_vec_class.push_back(HBM_pooling_vec_class);
+                DIMM_transaction_vec_class.push_back(DIMM_pooling_vec_class);
+                HBM_transaction_vec_class[count].clear();
+                DIMM_transaction_vec_class[count].clear();
+
                 continue;
             }
 
             ss.str(line);
-            string mode = "DIMM";
+            std::string mode = "DIMM";
+            char vec_class = 'o';
             uint64_t addr = 0;
             int str_count = 0;
 
@@ -543,29 +585,27 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
                     else
                         mode = str_tmp;
                 }
-                else
+                else if(str_count == 1)
+                {
                     addr = std::stoull(str_tmp);
+                }
+                else
+                {
+                    vec_class = str_tmp[0];
+                }
 
                 str_count++;
             }
 
-            // std::cout << addr << std::endl;
-
             if(mode == "HBM")
             {
-                if(is_collision)
-                {
-                    if(!last_was_DIMM)
-                        HBM_transaction[count].push_back(addr);
-                }
-                else
-                    HBM_transaction[count].push_back(addr);
-                last_was_DIMM = false;
+                HBM_transaction[count].push_back(addr);
+                HBM_transaction_vec_class[count].push_back(vec_class);
             }
             else
             {
                 DIMM_transaction[count].push_back(addr);
-                last_was_DIMM = true;
+                DIMM_transaction_vec_class[count].push_back(vec_class);
             }
 
             ss.clear();

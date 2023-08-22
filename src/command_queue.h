@@ -8,7 +8,6 @@
 #include "configuration.h"
 #include "simple_stats.h"
 #include "command_queue.h"
-#include "bg_pim.h"
 
 namespace dramsim3 {
 

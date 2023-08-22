@@ -1,9 +1,9 @@
-#include "bg_pim.h"
+#include "pim.h"
 // #include <algorithm>
 
 namespace dramsim3 {
 
-BGPIM::BGPIM(const Config &config)
+PIM::PIM(const Config &config)
     : config_(config)
 {
     batch_size = config_.batch_size;
@@ -23,7 +23,7 @@ BGPIM::BGPIM(const Config &config)
     }
 }
 
-void BGPIM::ClockTick()
+void PIM::ClockTick()
 {
     for(int i=0; i< config_.batch_size; i++)
     {
@@ -33,7 +33,7 @@ void BGPIM::ClockTick()
 }
 
 // add PIM instruction to the PIM instruction queue
-void BGPIM::InsertPIMInst(Transaction trans)
+void PIM::InsertPIMInst(Transaction trans)
 {
     // std::cout << "inst q size : " << "batch tag : "<< trans.pim_values.batch_tag << " " <<  instruction_queue[trans.pim_values.batch_tag].size() << std::endl;
 
@@ -44,7 +44,7 @@ void BGPIM::InsertPIMInst(Transaction trans)
 }
 
 // check whether command's address is in the instruction queue or not
-bool BGPIM::AddressInInstructionQueue(Transaction trans)
+bool PIM::AddressInInstructionQueue(Transaction trans)
 {
     std::vector<Transaction>& inst_queue = instruction_queue[trans.pim_values.batch_tag];
     for (auto it = inst_queue.begin(); it != inst_queue.end(); it++) 
@@ -56,7 +56,7 @@ bool BGPIM::AddressInInstructionQueue(Transaction trans)
 }
 
 // check whether command is issuable to the device or not
-bool BGPIM::CommandIssuable(Transaction trans, uint64_t clk)
+bool PIM::CommandIssuable(Transaction trans, uint64_t clk)
 {
     std::vector<Transaction>& inst_queue = instruction_queue[trans.pim_values.batch_tag];
 
@@ -81,7 +81,7 @@ bool BGPIM::CommandIssuable(Transaction trans, uint64_t clk)
 }
 
 // erase command from the read queue when read command is completed
-void BGPIM::EraseFromReadQueue(Transaction trans)
+void PIM::EraseFromReadQueue(Transaction trans)
 {
     std::vector<Transaction>& read_q = pim_read_queue[trans.pim_values.batch_tag];
 
@@ -103,12 +103,12 @@ void BGPIM::EraseFromReadQueue(Transaction trans)
     // }
 }
 
-void BGPIM::AddPIMCycle(Transaction trans)
+void PIM::AddPIMCycle(Transaction trans)
 {
     pim_cycle_left[trans.pim_values.batch_tag] += pim_cycle;
 }
 
-bool BGPIM::IsTransferTrans(Transaction trans)
+bool PIM::IsTransferTrans(Transaction trans)
 {
     std::vector<Transaction> bg_read_queue = pim_read_queue[trans.pim_values.batch_tag];
     for (auto it = bg_read_queue.begin(); it != bg_read_queue.end(); it++) 
@@ -119,14 +119,14 @@ bool BGPIM::IsTransferTrans(Transaction trans)
     return false;
 }
 
-bool BGPIM::PIMCycleCompleted(Transaction trans)
+bool PIM::PIMCycleCompleted(Transaction trans)
 {
     if(pim_cycle_left[trans.pim_values.batch_tag] == 0)
         return true;
     return false;
 }
 
-bool BGPIM::LastAdditionInProgress(Transaction trans)
+bool PIM::LastAdditionInProgress(Transaction trans)
 {
     if(!transfer_vec_in_progress[trans.pim_values.batch_tag])
     {
@@ -137,13 +137,13 @@ bool BGPIM::LastAdditionInProgress(Transaction trans)
     return true;
 }
 
-void BGPIM::LastAdditionComplete(Transaction trans)
+void PIM::LastAdditionComplete(Transaction trans)
 {
     transfer_vec_in_progress[trans.pim_values.batch_tag] = false;
 }
 
 // check whether requested transaction is r vector or not. If it is r vector, do nothing inside the controller
-bool BGPIM::IsRVector(Transaction trans)
+bool PIM::IsRVector(Transaction trans)
 {
     // std::cout <<  "check addr : " << trans.addr << " is r vec : " << trans.is_r_vec << std::endl;
     if(trans.pim_values.is_r_vec)
@@ -153,7 +153,7 @@ bool BGPIM::IsRVector(Transaction trans)
 
 
 // // check cmd's address to determine if the transaction with the same address inside PIM instruction queue has its vector transfer bit marked as 1
-// bool BGPIM::IsTransferTrans(Transaction trans)
+// bool PIM::IsTransferTrans(Transaction trans)
 // {
 //     if(trans.pim_values.vector_transfer)
 //     {
@@ -164,7 +164,7 @@ bool BGPIM::IsRVector(Transaction trans)
 // }
 
 
-void BGPIM::PrintAddress()
+void PIM::PrintAddress()
 {
     // for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
     // {

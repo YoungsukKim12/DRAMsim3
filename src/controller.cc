@@ -17,7 +17,7 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
       simple_stats_(config_, channel_id_),
       channel_state_(config, timing),
       cmd_queue_(channel_id_, config, channel_state_, simple_stats_),
-      bg_pims_(),
+      pims_(),
       refresh_(config, channel_state_),
 #ifdef THERMAL
       thermal_calc_(thermal_calc),
@@ -35,10 +35,15 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
         write_buffer_.reserve(config_.trans_queue_size);
     }
 
-    bg_pims_.reserve(config_.bankgroups);
-    for(int i=0; i < config_.bankgroups; i++){
-        bg_pims_.push_back(BGPIM(config));
+    if(config_.PIM_enabled)
+    {
+        pims_.reserve(config_.bankgroups);
+        for(int i=0; i < config_.bankgroups; i++){
+            pims_.push_back(PIM(config));
+        }
     }
+
+
 
 #ifdef CMD_TRACE
     std::string trace_file_name = config_.output_prefix + "ch_" +
@@ -63,7 +68,7 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
             {
                 Command cmd = TransToCommand(*it);
                 // std::cout<< "Command Done!" << std::endl;
-                BGPIM& bg_pim = bg_pims_[cmd.Bankgroup()];
+                PIM& bg_pim = pims_[cmd.Bankgroup()];
                 if(bg_pim.IsTransferTrans(*it))
                 {
                     if(!bg_pim.LastAdditionInProgress(*it))
@@ -107,9 +112,9 @@ void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
     // std::cout << "tick start!" << std::endl;
-    for(size_t i=0; i<bg_pims_.size();i++)
+    for(size_t i=0; i<pims_.size();i++)
     {
-        bg_pims_[i].ClockTick();
+        pims_[i].ClockTick();
     }
     // std::cout << "tick end!" << std::endl;
 
@@ -285,7 +290,7 @@ void Controller::ScheduleTransaction() {
 
             if(config_.PIM_enabled){
 
-                if(bg_pims_[cmd.Bankgroup()].IsRVector(*it))
+                if(pims_[cmd.Bankgroup()].IsRVector(*it))
                 {
                     auto pending_rd_q_it = pending_rd_q_.find(it->addr);
                     if(pending_rd_q_.count(it->addr) != 0)
@@ -299,10 +304,10 @@ void Controller::ScheduleTransaction() {
                         // std::cout<< "add command!" << std::endl;
                     // if(it->pim_values.vector_transfer)
                     //     std::cout << "addr : " << it->addr << std::endl;
-                    if(bg_pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
+                    if(pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
                     {
                         // std::cout<< "address in queue!" << std::endl;
-                        if(bg_pims_[cmd.Bankgroup()].CommandIssuable(*it, clk_))
+                        if(pims_[cmd.Bankgroup()].CommandIssuable(*it, clk_))
                         {
                             // std::cout<< "address issuable!" << std::endl;
                             cmd_queue_.AddCommand(cmd);
@@ -317,7 +322,7 @@ void Controller::ScheduleTransaction() {
                         (*it).pim_values.decode_cycle = clk_ + config_.decode_cycle;
                         // std::cout<< "insert to queue ready!" << std::endl;
 
-                        bg_pims_[cmd.Bankgroup()].InsertPIMInst(*it);
+                        pims_[cmd.Bankgroup()].InsertPIMInst(*it);
                         // std::cout<< "insert to queue end!" << std::endl;
 
                     }
