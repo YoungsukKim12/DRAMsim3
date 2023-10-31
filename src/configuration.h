@@ -137,6 +137,8 @@ class Config {
     // NMP, PIM parameters
     bool NMP_enabled;
     bool PIM_enabled;
+    bool LUT_enabled;
+    bool CA_compression;
     uint64_t skewed_cycle;
     int batch_size;
     int decode_cycle;

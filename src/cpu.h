@@ -109,26 +109,25 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void PrintStats() { memory_system_HBM.PrintStats(); }
     void ClockTick();
     void RunNMP();
-    void RunHEAM();
+    int RunHEAM();
     void LoadTrace(string filename);
     void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
     void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
-    void AddTransactionsToDIMM(int batch_start_index, int bat_tag, int& DIMM_vectors_left);
-    void AddTransactionsToHBM(int batch_start_index, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
+    void AddTransactionsToDIMM(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
+    void AddTransactionsToHBM(int batch_start_idx, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
     bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
-    void HeterogeneousMemoryClockTick();
     int GetBankGroup(uint64_t address);
     int GetChannel(uint64_t address);
-    std::unordered_map<int, uint64_t> ProfileAddresses(int batch_start_index, int batch_index);
-    bool IsLastAddressInBankGroup(const std::unordered_map<int, uint64_t>& lastAddressInBankGroup, uint64_t address);
+    void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
     int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
-    int GetBatchInformation(int batch_start_index, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+    void UpdateBatchInformation(int batch_start_idx, int& memory_transfers, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
 
    private:
     MemorySystem memory_system_HBM;
     MemorySystem memory_system_DIMM;
     uint64_t clk_HBM;
     uint64_t clk_DIMM;
+    const Config* hbm_config;
 
     std::ifstream trace_file_;
     Transaction trans_;
@@ -154,10 +153,13 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
 
     bool is_using_HEAM;
     bool is_using_LUT;
-    int channels = 16;
-    int bankgroups = 4;
-    int vec_transfers = 0;
-    int batch_size = 0;
+    bool CA_compression;
+    int num_rds;
+    int channels;
+    int bankgroups;
+    int vec_transfers;
+    int batch_size;
+    int num_ca_in_cycle;
     std::string addrmapping;
     std::vector<int> loads_per_bg;
     std::vector<int> loads_per_bg_for_q;

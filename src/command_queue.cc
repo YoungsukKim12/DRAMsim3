@@ -33,6 +33,28 @@ CommandQueue::CommandQueue(int channel_id, const Config& config,
     }
 }
 
+Command CommandQueue::BGPIM_GetCommandToIssue(int rank, int bankgroup) {
+    for (int i = 0; i < config_.banks_per_group; i++) {
+        int q_idx = GetQueueIndex(rank, bankgroup, i);
+        CMDQueue& queue = queues_[q_idx];
+
+        if (is_in_ref_) {
+            if (ref_q_indices_.find(q_idx) != ref_q_indices_.end()) {
+                continue;
+            }
+        }
+        auto cmd = GetFirstReadyInQueue(queue);
+        if (cmd.IsValid()) {
+            if (cmd.IsReadWrite()) {
+                EraseRWCommand(cmd);
+            }
+            return cmd;
+        }
+
+    }
+    return Command();
+}
+
 Command CommandQueue::GetCommandToIssue() {
     for (int i = 0; i < num_queues_; i++) {
         auto& queue = GetNextQueue();
@@ -96,8 +118,10 @@ Command CommandQueue::FinishRefresh() {
 
     if (cmd.IsRefresh()) {
         ref_q_indices_.clear();
+        // std::cout << "ref clear !" << std::endl;
         is_in_ref_ = false;
     }
+
     return cmd;
 }
 

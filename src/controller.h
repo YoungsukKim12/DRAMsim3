@@ -48,6 +48,7 @@ class Controller {
     CommandQueue cmd_queue_;
     std::vector<PIM> pims_;
     Refresh refresh_;
+    int counter; // for debug
 
 #ifdef THERMAL
     ThermalCalculator &thermal_calc_;

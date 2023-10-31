@@ -114,15 +114,17 @@ struct PimValues {
           is_r_vec(false), 
           is_locality_bit(false),
           batch_tag(false),
-          decode_cycle(0) {} // Default constructor
+          decode_cycle(0),
+          num_rds(0) {} // Default constructor
     
-    PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, bool isLocalityBit, int batchTag)
+    PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, bool isLocalityBit, int batchTag, int numRDs)
         : skewed_cycle(skewedCycle), 
           vector_transfer(vectorTransfer), 
           is_r_vec(isRVec), 
           is_locality_bit(isLocalityBit),
           batch_tag(batchTag),
-          decode_cycle(0) {} // Parameterized constructor
+          decode_cycle(0),
+          num_rds(numRDs) {}
 
     PimValues(const PimValues& pim_values)
         : skewed_cycle(pim_values.skewed_cycle), 
@@ -130,7 +132,8 @@ struct PimValues {
           is_r_vec(pim_values.is_r_vec), 
           is_locality_bit(pim_values.is_locality_bit),
           batch_tag(pim_values.batch_tag),
-          decode_cycle(pim_values.decode_cycle) {} // Parameterized constructor
+          decode_cycle(pim_values.decode_cycle),
+          num_rds(pim_values.num_rds) {}
 
     uint64_t skewed_cycle;
     bool vector_transfer;
@@ -138,6 +141,7 @@ struct PimValues {
     bool is_locality_bit;
     int batch_tag;
     uint64_t decode_cycle;
+    int num_rds;
 
 };
 

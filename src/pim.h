@@ -16,20 +16,17 @@ class PIM {
         void EraseFromReadQueue(Transaction trans);
         void AddPIMCycle(Transaction trans);
         bool IsTransferTrans(Transaction trans);
-        void ReleaseCommand(Command& cmd, uint64_t clk);
-        bool PIMCycleCompleted(Transaction trans);
+        bool PIMCycleComplete(Transaction trans);
         bool AddressInInstructionQueue(Transaction trans);
         bool LastAdditionInProgress(Transaction trans);
         void LastAdditionComplete(Transaction trans);
-
-        void PrintAddress();
         void ClockTick();
 
     private:
         std::vector<std::vector<Transaction>> instruction_queue;
         std::vector<std::vector<Transaction>> pim_read_queue;
         std::vector<int> pim_cycle_left;
-        std::vector<bool> transfer_vec_in_progress;
+        std::vector<bool> processing_transfer_vec;
         int decode_cycle;
         int pim_cycle;
         int batch_size;

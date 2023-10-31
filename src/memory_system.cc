@@ -14,6 +14,7 @@ MemorySystem::MemorySystem(const std::string &config_file,
         dram_system_ = new JedecDRAMSystem(*config_, output_dir, read_callback,
                                            write_callback);
     }
+    config_copy = config_;
 }
 
 MemorySystem::~MemorySystem() {

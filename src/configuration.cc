@@ -245,12 +245,15 @@ void Config::InitSystemParams() {
         reader.GetBoolean("system", "aggressive_precharging_enabled", false);
 
     // PIM parameters
-    NMP_enabled = reader.GetBoolean("system", "NMP_enabled", false);
-    PIM_enabled = reader.GetBoolean("system", "PIM_enabled", false);
-    skewed_cycle = GetInteger("system", "skewed_cycle", 64);
-    decode_cycle = GetInteger("system", "decode_cycle", 2);
-    pim_cycle = GetInteger("system", "pim_cycle", 2);
-    batch_size = GetInteger("system", "batch_size", 2);
+    NMP_enabled = reader.GetBoolean("pim_system", "NMP_enabled", false);
+    PIM_enabled = reader.GetBoolean("pim_system", "PIM_enabled", false);
+    LUT_enabled = reader.GetBoolean("pim_system", "LUT_enabled", false);
+    CA_compression = reader.GetBoolean("pim_system", "CA_compression", false);
+
+    skewed_cycle = GetInteger("pim_system", "skewed_cycle", 64);
+    decode_cycle = GetInteger("pim_system", "decode_cycle", 2);
+    pim_cycle = GetInteger("pim_system", "pim_cycle", 2);
+    batch_size = GetInteger("pim_system", "batch_size", 2);
     // std::cout << "skewed cycle : "<< skewed_cycle << std::endl;
     return;
 }
@@ -404,7 +407,7 @@ void Config::SetAddressMapping() {
     co_pos = field_pos.at("co");
 
     // std::cout << "ch : " << ch_pos << " ra : " << ra_pos << " bg : " << bg_pos << " ba : " << ba_pos << " ro : " << ro_pos << " co : " << co_pos << std::endl;
-    // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << std::endl;
+    // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << " shift bits : " << shift_bits << " req size bytes : " << request_size_bytes << std::endl;
 
 
     ch_mask = (1 << field_widths.at("ch")) - 1;

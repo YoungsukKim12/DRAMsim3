@@ -71,34 +71,43 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
                 PIM& bg_pim = pims_[cmd.Bankgroup()];
                 if(bg_pim.IsTransferTrans(*it))
                 {
-                    if(!bg_pim.LastAdditionInProgress(*it))
-                    {
-                        // std::cout << "addr : " << it->addr << std::endl;
-                        bg_pim.AddPIMCycle(*it);
-                    }
 
-                    if(bg_pim.PIMCycleCompleted(*it))
+                    if(!bg_pim.LastAdditionInProgress(*it))
+                        bg_pim.AddPIMCycle(*it);
+
+                    if(bg_pim.PIMCycleComplete(*it))
                     {
                         bg_pim.LastAdditionComplete(*it);
                         bg_pim.EraseFromReadQueue(*it);
                         auto pair = std::make_pair(it->addr, it->is_write);
                         it = return_queue_.erase(it);
+                        counter--;
+                        // std::cout << "transfer out cycle : " << clk_ << std::endl;
+                        // std::cout << "complete addr : " << it->addr << std::endl;
                         return pair;
                     }
-                    return std::make_pair(-1, -1);
+                    ++it;
                 }
                 else
                 {
+                    // std::cout << "HBM out cycle : " << clk_ << " return queue size "<< return_queue_.size()<< std::endl;
+
                     bg_pim.AddPIMCycle(*it);
-                    bg_pim.EraseFromReadQueue(*it);
+                    if(!it->pim_values.is_r_vec)
+                        bg_pim.EraseFromReadQueue(*it);
                     it = return_queue_.erase(it);
-                    return std::make_pair(-1, -1);
+                    counter--;
+                    // std::cout << "complete addr  : " << it->addr << std::endl;
+
                 }
             }
             else
             {
                 auto pair = std::make_pair(it->addr, it->is_write);
                 it = return_queue_.erase(it);
+
+                // std::cout << "DIMM out cycle : " << clk_ << std::endl;
+
                 return pair;
             }
         } else {
@@ -111,43 +120,59 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
 void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
-    // std::cout << "tick start!" << std::endl;
     for(size_t i=0; i<pims_.size();i++)
     {
         pims_[i].ClockTick();
     }
-    // std::cout << "tick end!" << std::endl;
 
     bool cmd_issued = false;
     Command cmd;
     if (channel_state_.IsRefreshWaiting()) {
         cmd = cmd_queue_.FinishRefresh();
+        // std::cout << cmd.IsValid() << std::endl;
     }
 
     // cannot find a refresh related command or there's no refresh
-    if (!cmd.IsValid()) {
-            // std::cout << "cmd issue start!" << std::endl;
-
-        cmd = cmd_queue_.GetCommandToIssue();
-            // std::cout << "cmd issue end!" << std::endl;
+    if(config_.PIM_enabled)
+    {
+        if (!cmd.IsValid()) {
+            for(int i=0; i<config_.ranks; i++)
+            {
+                for(int j=0; j<config_.bankgroups;j++)
+                {
+                    cmd = cmd_queue_.BGPIM_GetCommandToIssue(i, j);
+                    if (cmd.IsValid()) {
+                        IssueCommand(cmd);
+                        cmd_issued = true;
+                    }
+                }
+            }
+        }
+        else
+        {
+            IssueCommand(cmd);
+            cmd_issued = true;
+        }
 
     }
+    else
+    {
+        if (!cmd.IsValid())
+            cmd = cmd_queue_.GetCommandToIssue();
+        if (cmd.IsValid()) {
+            IssueCommand(cmd);
+            cmd_issued = true;
+            if (config_.enable_hbm_dual_cmd) {
+                Command second_cmd;
+                second_cmd = cmd_queue_.GetSecondCommandToIssue();
 
-    if (cmd.IsValid()) {
-
-        IssueCommand(cmd);
-        cmd_issued = true;
-
-        if (config_.enable_hbm_dual_cmd) {
-            Command second_cmd;
-            second_cmd = cmd_queue_.GetSecondCommandToIssue();
-
-            if (second_cmd.IsValid()) {
-                if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
-                    if(second_cmd.IsReadWrite())
-                        cmd_queue_.EraseSecondRWCommand(second_cmd);
-                    IssueCommand(second_cmd);
-                    simple_stats_.Increment("hbm_dual_cmds");
+                if (second_cmd.IsValid()) {
+                    if (second_cmd.IsReadWrite() != cmd.IsReadWrite()) {
+                        if(second_cmd.IsReadWrite())
+                            cmd_queue_.EraseSecondRWCommand(second_cmd);
+                        IssueCommand(second_cmd);
+                        simple_stats_.Increment("hbm_dual_cmds");
+                    }
                 }
             }
         }
@@ -202,9 +227,7 @@ void Controller::ClockTick() {
         }
     }
 
-    // std::cout << "schedule!" << std::endl;
     ScheduleTransaction();
-
     clk_++;
     cmd_queue_.ClockTick();
     simple_stats_.Increment("num_cycles");
@@ -245,10 +268,15 @@ bool Controller::AddTransaction(Transaction trans) {
             return_queue_.push_back(trans);
             return true;
         }
-        pending_rd_q_.insert(std::make_pair(trans.addr, trans));
 
-    // if(trans.pim_values.vector_transfer)
-    //     std::cout << "!addr : " << trans.addr << " pending_rd_q size " << pending_rd_q_.count(trans.addr) << std::endl;
+            if(config_.PIM_enabled)
+            {
+                if(!config_.CA_compression)
+                    pending_rd_q_.insert(std::make_pair(trans.addr, trans));
+
+            }
+            else
+                pending_rd_q_.insert(std::make_pair(trans.addr, trans));
 
         // if (pending_rd_q_.count(trans.addr) == 1) {
             if (is_unified_queue_) {
@@ -275,64 +303,150 @@ void Controller::ScheduleTransaction() {
         is_unified_queue_ ? unified_queue_
                           : write_draining_ > 0 ? write_buffer_ : read_queue_;
 
-    for (auto it = queue.begin(); it != queue.end(); it++) {
-        auto cmd = TransToCommand(*it);
-        if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
-                                         cmd.Bank())) {
-            if (!is_unified_queue_ && cmd.IsWrite()) {
-                // Enforce R->W dependency
-                if (pending_rd_q_.count(it->addr) > 0) {
-                    write_draining_ = 0;
-                    break;
-                }
-                write_draining_ -= 1;
-            }
+    // r vector
+    if(config_.PIM_enabled)
+    {
+        for (auto it = queue.begin(); it != queue.end(); it++) {
+            auto cmd = TransToCommand(*it);
 
-            if(config_.PIM_enabled){
+            if(pims_[cmd.Bankgroup()].IsRVector(*it))
+            {
+                // push it only to the return_queue (do not push vector to the command queue)
 
-                if(pims_[cmd.Bankgroup()].IsRVector(*it))
+                if(config_.CA_compression)
                 {
-                    auto pending_rd_q_it = pending_rd_q_.find(it->addr);
-                    if(pending_rd_q_.count(it->addr) != 0)
-                        pending_rd_q_.erase(pending_rd_q_it);
+                    int n_cmds = it->pim_values.num_rds;
+                    for(int i=0; i<n_cmds; i++)
+                    {
+                        Transaction sub_vec = *it;
+                        sub_vec.addr = it->addr + 64*i; 
+                        sub_vec.complete_cycle = clk_+ 1*(i+1);
+                        return_queue_.push_back(sub_vec);
+                    }
                     queue.erase(it);
-
-                    break;
                 }
                 else
                 {
-                        // std::cout<< "add command!" << std::endl;
-                    // if(it->pim_values.vector_transfer)
-                    //     std::cout << "addr : " << it->addr << std::endl;
-                    if(pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
+                    (*it).complete_cycle = clk_+ 1;
+                    return_queue_.push_back(*it);
+                    queue.erase(it);
+                }
+            }
+        }
+
+        // add to PIM; perhaps need to consider command queue?
+        for (auto it = queue.begin(); it != queue.end(); it++) {
+            if(config_.CA_compression)
+            {
+                int n_cmds = it->pim_values.num_rds;
+                for(int i=0; i<n_cmds; i++)
+                {
+                    Transaction sub_vec = *it;
+                    sub_vec.addr = it->addr + 64*i; 
+                    auto cmd = TransToCommand(sub_vec);
+                    if(!pims_[cmd.Bankgroup()].IsRVector(sub_vec) && !pims_[cmd.Bankgroup()].AddressInInstructionQueue(sub_vec))
                     {
-                        // std::cout<< "address in queue!" << std::endl;
-                        if(pims_[cmd.Bankgroup()].CommandIssuable(*it, clk_))
-                        {
-                            // std::cout<< "address issuable!" << std::endl;
-                            cmd_queue_.AddCommand(cmd);
-                            queue.erase(it); 
-                        }
+                        sub_vec.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+                        sub_vec.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+                        pims_[cmd.Bankgroup()].InsertPIMInst(sub_vec);
+                        break;
                     }
-                    else
-                    {
-                        // std::cout<< "insert to queue!" << std::endl;
-
-                        (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-                        (*it).pim_values.decode_cycle = clk_ + config_.decode_cycle;
-                        // std::cout<< "insert to queue ready!" << std::endl;
-
-                        pims_[cmd.Bankgroup()].InsertPIMInst(*it);
-                        // std::cout<< "insert to queue end!" << std::endl;
-
-                    }
-
+                }
+            }
+            else
+            {
+                auto cmd = TransToCommand(*it);
+                if(!pims_[cmd.Bankgroup()].IsRVector(*it) && !pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
+                {
+                    (*it).pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+                    (*it).pim_values.decode_cycle = clk_ + config_.decode_cycle;
+                    pims_[cmd.Bankgroup()].InsertPIMInst(*it);
                     break;
                 }
-            }else{
+
+            }
+        }
+
+        // issue from PIM
+        for (auto it = queue.begin(); it != queue.end(); it++) {
+            int n_cmds = it->pim_values.num_rds;
+            auto cmd = TransToCommand(*it);
+            // std::cout << cmd.hex_addr << std::endl;
+            if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
+                                            cmd.Bank())) {
+                if (!is_unified_queue_ && cmd.IsWrite()) {
+                    // Enforce R->W dependency
+                    if (pending_rd_q_.count(it->addr) > 0) {
+                        write_draining_ = 0;
+                        break;
+                    }
+                    write_draining_ -= 1;
+                }
+
+                bool cmd_added = false;
+                if(config_.CA_compression)
+                {
+                    for(int i=0; i<n_cmds; i++)
+                    {
+                        Transaction sub_vec = *it;
+                        sub_vec.addr = it->addr + 64*i; 
+                        auto cmd = TransToCommand(sub_vec);
+                        if(pims_[cmd.Bankgroup()].AddressInInstructionQueue(sub_vec))
+                        {
+                            // Dangerous...
+                            if(pims_[cmd.Bankgroup()].CommandIssuable(sub_vec, clk_))
+                            {
+                                cmd_queue_.AddCommand(cmd);
+                                pending_rd_q_.insert(std::make_pair(sub_vec.addr, sub_vec));
+                                cmd_added = true;
+                                counter++;
+                            }
+                        }
+                    }
+                    // Dangerous...
+                    if(cmd_added)
+                    {
+                        queue.erase(it); 
+                        break;
+                    }
+                }
+                else
+                {
+                    if(pims_[cmd.Bankgroup()].AddressInInstructionQueue(*it))
+                    {
+
+                        if(pims_[cmd.Bankgroup()].CommandIssuable(*it, clk_))
+                        {
+                            cmd_queue_.AddCommand(cmd);
+                            cmd_added = true;
+                            queue.erase(it); 
+                            break;
+                        }
+                    }
+
+                }
+
+            }
+        }
+    }
+    else
+    {
+        for (auto it = queue.begin(); it != queue.end(); it++) {
+            auto cmd = TransToCommand(*it);
+            if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
+                                            cmd.Bank())) {
+                if (!is_unified_queue_ && cmd.IsWrite()) {
+                    // Enforce R->W dependency
+                    if (pending_rd_q_.count(it->addr) > 0) {
+                        write_draining_ = 0;
+                        break;
+                    }
+                    write_draining_ -= 1;
+                }
                 cmd_queue_.AddCommand(cmd);
                 queue.erase(it);
                 break;
+                
             }
         }
     }

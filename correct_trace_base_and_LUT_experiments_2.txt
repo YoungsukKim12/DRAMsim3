@@ -1,0 +1,38 @@
+[ 82%] Built target dramsim3
+[100%] Built target dramsim3main
+Running with col size: 4 and vec size: 64
+Using following trace file : ../dlrm_yskim/traces/correct_trace_1/random_trace_col_4_vecsize_64.txt
+------------ Info ------------
+- using HEAM : 1
+- using LUT : 0
+- batch size : 4
+- addr mapping : rorabgchbaco
+- total cycle : 2081142
+-----------------------------
+Running with col size: 4 and vec size: 128
+Using following trace file : ../dlrm_yskim/traces/correct_trace_1/random_trace_col_4_vecsize_128.txt
+------------ Info ------------
+- using HEAM : 1
+- using LUT : 0
+- batch size : 4
+- addr mapping : rorabgchbaco
+- total cycle : 2840972
+-----------------------------
+Running with col size: 4 and vec size: 256
+Using following trace file : ../dlrm_yskim/traces/correct_trace_1/random_trace_col_4_vecsize_256.txt
+------------ Info ------------
+- using HEAM : 1
+- using LUT : 0
+- batch size : 4
+- addr mapping : rorabgchbaco
+- total cycle : 4694064
+-----------------------------
+Running with col size: 4 and vec size: 512
+Using following trace file : ../dlrm_yskim/traces/correct_trace_1/random_trace_col_4_vecsize_512.txt
+------------ Info ------------
+- using HEAM : 1
+- using LUT : 0
+- batch size : 4
+- addr mapping : rorabgchbaco
+- total cycle : 8532512
+-----------------------------

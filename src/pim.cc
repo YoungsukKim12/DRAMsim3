@@ -19,7 +19,7 @@ PIM::PIM(const Config &config)
         instruction_queue.push_back(inst_queue);
         std::vector<Transaction> read_queue;
         pim_read_queue.push_back(read_queue);
-        transfer_vec_in_progress.push_back(false);
+        processing_transfer_vec.push_back(false);
     }
 }
 
@@ -35,12 +35,7 @@ void PIM::ClockTick()
 // add PIM instruction to the PIM instruction queue
 void PIM::InsertPIMInst(Transaction trans)
 {
-    // std::cout << "inst q size : " << "batch tag : "<< trans.pim_values.batch_tag << " " <<  instruction_queue[trans.pim_values.batch_tag].size() << std::endl;
-
     instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-    // if(trans.pim_values.vector_transfer)
-    //     std::cout << "insertion : " << trans.addr << " batch : " << trans.pim_values.batch_tag << std::endl;
-    // std::cout << "pim values : " << trans.pim_values.skewed_cycle << trans.pim_values.is_r_vec << trans.pim_values.vector_transfer << std::endl;
 }
 
 // check whether command's address is in the instruction queue or not
@@ -65,13 +60,7 @@ bool PIM::CommandIssuable(Transaction trans, uint64_t clk)
         if(trans.addr == it->addr && std::max((it->pim_values).skewed_cycle,(it->pim_values).decode_cycle) <= clk)
         {
             pim_read_queue[trans.pim_values.batch_tag].push_back(*it);
-            // if(trans.pim_values.vector_transfer)
-                // std::cout << "to read queue : " << it->addr << " batch : " << trans.pim_values.batch_tag << std::endl;
-
-            // std::cout << "read queue addr : " << it->addr << " batch tag : "<< trans.pim_values.batch_tag << std::endl;
             inst_queue.erase(it);
-            // std::cout << "insert : batch " << trans.pim_values.batch_tag << " read queue size : " << pim_read_queue[trans.pim_values.batch_tag].size() << std::endl;
-
             return true;
         }
     }
@@ -89,18 +78,10 @@ void PIM::EraseFromReadQueue(Transaction trans)
     {
         if(trans.addr == it->addr)
         {
-            // std::cout << "to erase read queue addr : " << it->addr << " batch tag : " << trans.pim_values.batch_tag << std::endl;
-            // std::cout << "erase  : batch " << trans.pim_values.batch_tag << " read queue size : " << read_q.size() << std::endl;
             read_q.erase(it);
-            // std::cout << "after erase  : batch " << trans.pim_values.batch_tag << " read queue size : " << read_q.size() << std::endl;
-
             break;
         }
     }
-    // for(int i=0; i<batch_size; i++)
-    // {
-    //     std::cout << "read queue size : " << i << " " << pim_read_queue[i].size() << std::endl;
-    // }
 }
 
 void PIM::AddPIMCycle(Transaction trans)
@@ -110,6 +91,9 @@ void PIM::AddPIMCycle(Transaction trans)
 
 bool PIM::IsTransferTrans(Transaction trans)
 {
+    if(trans.pim_values.vector_transfer && trans.pim_values.is_r_vec)
+        return true;
+
     std::vector<Transaction> bg_read_queue = pim_read_queue[trans.pim_values.batch_tag];
     for (auto it = bg_read_queue.begin(); it != bg_read_queue.end(); it++) 
     {
@@ -119,7 +103,7 @@ bool PIM::IsTransferTrans(Transaction trans)
     return false;
 }
 
-bool PIM::PIMCycleCompleted(Transaction trans)
+bool PIM::PIMCycleComplete(Transaction trans)
 {
     if(pim_cycle_left[trans.pim_values.batch_tag] == 0)
         return true;
@@ -128,9 +112,9 @@ bool PIM::PIMCycleCompleted(Transaction trans)
 
 bool PIM::LastAdditionInProgress(Transaction trans)
 {
-    if(!transfer_vec_in_progress[trans.pim_values.batch_tag])
+    if(!processing_transfer_vec[trans.pim_values.batch_tag])
     {
-        transfer_vec_in_progress[trans.pim_values.batch_tag] = true;
+        processing_transfer_vec[trans.pim_values.batch_tag] = true;
         return false;
     }
 
@@ -139,7 +123,7 @@ bool PIM::LastAdditionInProgress(Transaction trans)
 
 void PIM::LastAdditionComplete(Transaction trans)
 {
-    transfer_vec_in_progress[trans.pim_values.batch_tag] = false;
+    processing_transfer_vec[trans.pim_values.batch_tag] = false;
 }
 
 // check whether requested transaction is r vector or not. If it is r vector, do nothing inside the controller
@@ -151,27 +135,5 @@ bool PIM::IsRVector(Transaction trans)
     return false;
 }
 
-
-// // check cmd's address to determine if the transaction with the same address inside PIM instruction queue has its vector transfer bit marked as 1
-// bool PIM::IsTransferTrans(Transaction trans)
-// {
-//     if(trans.pim_values.vector_transfer)
-//     {
-//     // std::cout << "inside bg pim : " << trans.addr << " " << trans.vector_transfer << std :: endl; 
-//         return true;
-//     }
-//     return false;
-// }
-
-
-void PIM::PrintAddress()
-{
-    // for (auto it = instruction_queue.begin(); it != instruction_queue.end(); it++) 
-    // {
-    //     std::cout << "addr : " << it->addr << std::endl;
-    // }
-    // std::cout << "----------------------------------------------" << std::endl;
-    return;
-}
 
 }
