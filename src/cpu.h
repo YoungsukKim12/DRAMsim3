@@ -8,6 +8,7 @@
 #include <list>
 #include "memory_system.h"
 #include "common.h"
+#include <tuple>
 
 namespace dramsim3 {
 
@@ -110,6 +111,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void ClockTick();
     void RunNMP();
     int RunHEAM();
+    int RunTRiM();
     void LoadTrace(string filename);
     void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
     void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
@@ -120,7 +122,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int GetChannel(uint64_t address);
     void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
     int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
-    void UpdateBatchInformation(int batch_start_idx, int& memory_transfers, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+    void GetNextBatchInformation(int batch_start_idx, int& memory_transfers, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+    void ReorderHBMTransaction(int emb_pool_idx);
 
    private:
     MemorySystem memory_system_HBM;
@@ -136,10 +139,10 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int complete_transactions = 0;
     int add_cycle = 3;
 
-    std::vector<std::vector<uint64_t>> HBM_transaction;
-    std::vector<std::vector<uint64_t>> DIMM_transaction;
-    std::vector<std::vector<char>> HBM_transaction_vec_class;
-    std::vector<std::vector<char>> DIMM_transaction_vec_class;
+    std::vector<std::vector<std::tuple<uint64_t, char, int>>> HBM_transaction;
+    std::vector<std::vector<std::tuple<uint64_t, char, int>>> DIMM_transaction;
+    // std::vector<std::vector<char>> HBM_transaction_vec_class;
+    // std::vector<std::vector<char>> DIMM_transaction_vec_class;
 
     std::list<uint64_t> HBM_address_in_processing;
     std::list<uint64_t> DIMM_address_in_processing;

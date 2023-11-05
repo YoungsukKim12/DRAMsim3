@@ -118,7 +118,6 @@ Command CommandQueue::FinishRefresh() {
 
     if (cmd.IsRefresh()) {
         ref_q_indices_.clear();
-        // std::cout << "ref clear !" << std::endl;
         is_in_ref_ = false;
     }
 

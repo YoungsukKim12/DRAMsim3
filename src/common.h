@@ -115,16 +115,20 @@ struct PimValues {
           is_locality_bit(false),
           batch_tag(false),
           decode_cycle(0),
-          num_rds(0) {} // Default constructor
+          num_rds(0),
+          is_last_subvec(false),
+          start_addr(0) {} // Default constructor
     
-    PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, bool isLocalityBit, int batchTag, int numRDs)
+    PimValues(uint64_t skewedCycle, bool vectorTransfer, bool isRVec, bool isLocalityBit, int batchTag, int numRDs, bool isLastSubVec, uint64_t startAddr)
         : skewed_cycle(skewedCycle), 
           vector_transfer(vectorTransfer), 
           is_r_vec(isRVec), 
           is_locality_bit(isLocalityBit),
           batch_tag(batchTag),
           decode_cycle(0),
-          num_rds(numRDs) {}
+          num_rds(numRDs),
+          is_last_subvec(isLastSubVec),
+          start_addr(startAddr) {}
 
     PimValues(const PimValues& pim_values)
         : skewed_cycle(pim_values.skewed_cycle), 
@@ -133,7 +137,9 @@ struct PimValues {
           is_locality_bit(pim_values.is_locality_bit),
           batch_tag(pim_values.batch_tag),
           decode_cycle(pim_values.decode_cycle),
-          num_rds(pim_values.num_rds) {}
+          num_rds(pim_values.num_rds),
+          is_last_subvec(pim_values.is_last_subvec),
+          start_addr(pim_values.start_addr) {}
 
     uint64_t skewed_cycle;
     bool vector_transfer;
@@ -142,7 +148,10 @@ struct PimValues {
     int batch_tag;
     uint64_t decode_cycle;
     int num_rds;
+    bool is_last_subvec;
+    uint64_t start_addr;
 
+    // int subvec_idx;
 };
 
 struct Transaction {
