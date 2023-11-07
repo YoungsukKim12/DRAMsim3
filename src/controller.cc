@@ -119,7 +119,18 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
                         }
                     }
                 }
-
+                // Command cmd = TransToCommand(*it);
+                // PIM& bg_pim = pims_[cmd.Bankgroup()];
+                // bool process_complete = bg_pim.RunALULogic(*it);
+                // if(process_complete)
+                // {
+                //     it = return_queue_.erase(it);
+                //     auto pair = bg_pim.PullTransferTrans();
+                //     if(pair.first != -1)
+                //         return pair;
+                // }
+                // else
+                //     ++it;
             }
             else
             {
@@ -413,7 +424,7 @@ void Controller::ScheduleTransaction() {
                         {
                             if(pim_.CommandIssuable(subvec_trans, clk_))
                             {
-                                Transaction issue_trans = pim_.FetchCommandToIssue(subvec_trans, clk_);
+                                Transaction issue_trans = pim_.FetchInstructionToIssue(subvec_trans, clk_);
                                 if(issue_trans.added_cycle == 0) // no such trans found.
                                 {
                                     std::cout << "transaction error occured" << std::endl; 
@@ -492,7 +503,7 @@ void Controller::ScheduleTransaction() {
                     {
                         if(pim_.CommandIssuable(*it, clk_))
                         {
-                            Transaction issue_trans = pim_.FetchCommandToIssue(*it, clk_);
+                            Transaction issue_trans = pim_.FetchInstructionToIssue(*it, clk_);
                             Command cmd = TransToCommand(issue_trans);
                             cmd_queue_.AddCommand(cmd);
                             queue.erase(it); 

@@ -3,10 +3,28 @@
 
 #include <vector>
 #include "common.h"
+#include "pim_common.h"
 #include "configuration.h"
-#include <unordered_map>
 
 namespace dramsim3 {
+
+class NMP {
+    public:
+        NMP(int add_cycle):
+            add_cycle_(add_cycle) {}
+        // nmp logics
+        void ClockTick() {clk_ = clk_ + 1;};
+        int GetPendingTransfers();
+        void SetTotalTransfers(int transfers);
+        bool CheckNMPDone();
+        bool RunNMPLogic(int complete_transactions);
+
+    private:
+        int clk_;
+        NMPValues nmp_values;
+        int add_cycle_;
+
+};
 
 class PIM {
     public:
@@ -19,7 +37,9 @@ class PIM {
 
         // decode functions
         bool CommandIssuable(Transaction trans, uint64_t clk);
-        Transaction FetchCommandToIssue(Transaction trans, uint64_t clk);
+        Transaction FetchInstructionToIssue(Transaction trans, uint64_t clk);
+        bool DecodeInstruction(Transaction trans);
+        Command GetCommandToIssue();
 
         // pim logics (input)
         bool IsRVector(Transaction trans);
@@ -30,11 +50,13 @@ class PIM {
         void IncrementSubVecCount(Transaction trans);
         bool LastAdditionInProgress(Transaction trans);
         void LastAdditionComplete(Transaction trans);
+        bool RunALULogic(Transaction waiting_inst);
 
         // pim logics
         void AddPIMCycle(Transaction trans);
         bool PIMCycleComplete(Transaction trans);
         void EraseFromReadQueue(Transaction trans);
+        std::pair<uint64_t, int> PullTransferTrans();
 
     private:
         std::vector<std::vector<Transaction>> instruction_queue;
@@ -46,6 +68,8 @@ class PIM {
         int pim_cycle;
         int batch_size;
         const Config &config_;
+        bool transfer_complete;
+        Transaction transferTrans;
 
 };
 

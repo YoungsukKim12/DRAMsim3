@@ -8,6 +8,7 @@
 #include <list>
 #include "memory_system.h"
 #include "common.h"
+#include "pim.h"
 #include <tuple>
 
 namespace dramsim3 {
@@ -103,60 +104,64 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     TraceBasedCPUForHeterogeneousMemory(const std::string& config_file_HBM, const std::string& config_file_DIMM, const std::string& output_dir, const std::string& trace_file);
     ~TraceBasedCPUForHeterogeneousMemory() {}
 
-    void ReadCallBack_HBM(uint64_t addr);
-    void ReadCallBack_DIMM(uint64_t addr);
-    void WriteCallBack_HBM(uint64_t addr){}
-    void WriteCallBack_DIMM(uint64_t addr){}
-    void PrintStats() { memory_system_HBM.PrintStats(); }
+    int PIMMemGetBankGroup(uint64_t address);
+    int PIMMemGetChannel(uint64_t address);
+    int MemGetBankGroup(uint64_t address);
+    int MemGetChannel(uint64_t address);
+    void LoadTrace(string filename);
+    void PrintStats() { memory_system_PIM.PrintStats(); }
     void ClockTick();
-    void RunNMP();
+
+    int RunTensorDIMM();
+    int RunRecNMP();
+    int RunSPACE();
     int RunHEAM();
     int RunTRiM();
-    void LoadTrace(string filename);
-    void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
-    void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
-    void AddTransactionsToDIMM(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
-    void AddTransactionsToHBM(int batch_start_idx, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
-    bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
-    int GetBankGroup(uint64_t address);
-    int GetChannel(uint64_t address);
+
+    void ReadCallBack_PIMMem(uint64_t addr);
+    void ReadCallBack_Mem(uint64_t addr);
+    void WriteCallBack_PIMMem(uint64_t addr){}
+    void WriteCallBack_Mem(uint64_t addr){}
+
+    int UpdateBatchInfoForHetero(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+    int UpdateBatchInfo(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+
+    void AddBatchTransactionsToHetero(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
+    void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
+    void AddTransactionsToPIMMem(int batch_start_idx, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
+    void AddTransactionsToMemory(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
     void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
-    int GetTotalPIMTransfers(std::unordered_map<int, uint64_t> lastAddressInBankGroup);
-    void GetNextBatchInformation(int batch_start_idx, int& memory_transfers, std::vector<int>& HBM_vectors_left, std::vector<int>& DIMM_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
+    bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
+
     void ReorderHBMTransaction(int emb_pool_idx);
+    uint64_t HotEntryReplication(uint64_t target_addr);
+    // void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
 
    private:
-    MemorySystem memory_system_HBM;
-    MemorySystem memory_system_DIMM;
-    uint64_t clk_HBM;
-    uint64_t clk_DIMM;
-    const Config* hbm_config;
+    MemorySystem memory_system_PIM;
+    MemorySystem memory_system_Mem;
+    uint64_t clk_PIM;
+    uint64_t clk_Mem;
+    const Config* PIMMem_config;
+    const Config* Mem_config;
 
     std::ifstream trace_file_;
     Transaction trans_;
-    bool HBM_get_next_ = true;
-    bool DIMM_get_next_ = true;
     int complete_transactions = 0;
     int add_cycle = 3;
 
-    std::vector<std::vector<std::tuple<uint64_t, char, int>>> HBM_transaction;
-    std::vector<std::vector<std::tuple<uint64_t, char, int>>> DIMM_transaction;
-    // std::vector<std::vector<char>> HBM_transaction_vec_class;
-    // std::vector<std::vector<char>> DIMM_transaction_vec_class;
+    std::vector<std::vector<std::tuple<uint64_t, char, int>>> PIMMem_transaction;
+    std::vector<std::vector<std::tuple<uint64_t, char, int>>> Mem_transaction;
+    std::list<uint64_t> PIMMem_address_in_processing;
+    std::list<uint64_t> Mem_address_in_processing;
+    uint64_t PIMMem_complete_addr;
+    uint64_t Mem_complete_addr;
 
-    std::list<uint64_t> HBM_address_in_processing;
-    std::list<uint64_t> DIMM_address_in_processing;
-
-    uint64_t HBM_complete_addr;
-    uint64_t DIMM_complete_addr;
-
-    // for callback debug
-    int hbm_complete_count;
-    int dimm_complete_count;
-
+    bool is_using_hetero;
     bool is_using_HEAM;
     bool is_using_LUT;
     bool CA_compression;
+    bool is_using_TRiM;
     int num_rds;
     int channels;
     int bankgroups;

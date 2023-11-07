@@ -41,6 +41,18 @@ Address Config::AddressMapping(uint64_t hex_addr) const {
     return Address(channel, rank, bg, ba, ro, co);
 }
 
+uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co) const {
+    uint64_t addr = 0;
+    addr += ch << ch_pos;
+    addr += ra << ra_pos;
+    addr += bg << bg_pos;
+    addr += ba << ba_pos;
+    addr += ro << ro_pos;
+    addr += co << co_pos;
+
+    return addr;
+}
+
 void Config::CalculateSize() {
     // calculate rank and re-calculate channel_size
     devices_per_rank = bus_width / device_width;

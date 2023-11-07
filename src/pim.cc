@@ -3,6 +3,59 @@
 
 namespace dramsim3 {
 
+int NMP::GetPendingTransfers()
+{
+    return nmp_values.total_transfers;
+}
+
+void NMP::SetTotalTransfers(int transfers)
+{
+    nmp_values.total_transfers = transfers;
+}
+
+bool NMP::CheckNMPDone()
+{
+    return (nmp_values.total_transfers > 0 || nmp_values.nmp_buffer_queue > 0 || nmp_values.nmp_cycle_left > 0);
+}
+
+bool NMP::RunNMPLogic(int complete_transactions)
+{
+    bool transaction_processed = false;
+    int& nmp_cycle_left = nmp_values.nmp_cycle_left;
+    int& nmp_buffer_queue = nmp_values.nmp_buffer_queue;
+    int& memory_transfers = nmp_values.total_transfers;
+
+    if(nmp_cycle_left > 0)
+        nmp_cycle_left--;
+    else
+    {
+        if(nmp_buffer_queue > 0)
+        {
+            nmp_buffer_queue--;
+            nmp_cycle_left = add_cycle_;
+        }
+    }
+
+    if(complete_transactions > 0)
+    {
+        if(nmp_cycle_left > 0)
+            nmp_buffer_queue += complete_transactions;
+        else
+        {
+            nmp_cycle_left = add_cycle_;
+            if(complete_transactions > 1)
+                nmp_buffer_queue += (complete_transactions-1);
+        }
+        memory_transfers -= complete_transactions;
+        transaction_processed = true;
+    }        
+
+    ClockTick();        
+
+    return transaction_processed;
+}
+
+
 PIM::PIM(const Config &config)
     : config_(config)
 {
@@ -31,6 +84,8 @@ void PIM::ClockTick()
             pim_cycle_left[i]--;
     }
 }
+
+
 
 void PIM::InsertPIMInst(Transaction trans)
 {
@@ -65,7 +120,7 @@ bool PIM::CommandIssuable(Transaction trans, uint64_t clk)
     return false;
 }
 
-Transaction PIM::FetchCommandToIssue(Transaction trans, uint64_t clk)
+Transaction PIM::FetchInstructionToIssue(Transaction trans, uint64_t clk)
 {
     std::vector<Transaction>& inst_queue = instruction_queue[trans.pim_values.batch_tag];
     for (auto it = inst_queue.begin(); it != inst_queue.end(); it++) 
@@ -81,6 +136,89 @@ Transaction PIM::FetchCommandToIssue(Transaction trans, uint64_t clk)
     }
     return Transaction();
 }
+
+bool PIM::DecodeInstruction(Transaction trans)
+{
+    // make trans to command and insert to pim dedicated command queue (just use command queue script)
+    // this might not be possible due to original cmd_queue functions related to the controller
+}
+
+Command PIM::GetCommandToIssue()
+{
+    // get command from pim dedicated command queue
+}
+
+std::pair<uint64_t, int> PIM::PullTransferTrans()
+{
+    if(transfer_complete)
+    {
+        transfer_complete = false;
+        // std::cout << transferTrans.addr << std::endl;
+        return std::make_pair(transferTrans.addr, transferTrans.is_write);
+    }
+    return std::make_pair(-1, -1);
+}
+
+bool PIM::RunALULogic(Transaction done_inst)
+{
+    if(IsTransferTrans(done_inst))
+    {
+        if(AllSubVecReadComplete(done_inst))
+        {
+            if(!LastAdditionInProgress(done_inst))
+            {
+                AddPIMCycle(done_inst);
+                return false;
+            }
+
+            if(PIMCycleComplete(done_inst))
+            {
+                LastAdditionComplete(done_inst);
+                EraseFromReadQueue(done_inst);
+                transferTrans = done_inst;
+                transfer_complete = true;
+                return true;
+            }
+            return false;
+        }
+        else
+            return false;
+    }
+    else
+    {
+        if(done_inst.pim_values.is_last_subvec)
+        {
+            if(done_inst.pim_values.is_r_vec)
+            {
+                AddPIMCycle(done_inst);
+                return true;
+            }
+            else
+            {
+                if(AllSubVecReadComplete(done_inst))
+                {
+                    AddPIMCycle(done_inst);
+                    EraseFromReadQueue(done_inst);
+                    return true;
+                }
+                else
+                    return false;
+            }
+        }
+        else
+        {
+            if(done_inst.pim_values.is_r_vec)
+                return true;
+            else
+            {
+                IncrementSubVecCount(done_inst);
+                EraseFromReadQueue(done_inst);
+                return true;
+            }
+        }
+    }
+}
+
 
 bool PIM::IsRVector(Transaction trans)
 {
