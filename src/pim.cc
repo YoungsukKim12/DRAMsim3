@@ -15,6 +15,7 @@ void NMP::SetTotalTransfers(int transfers)
 
 bool NMP::CheckNMPDone()
 {
+    // std::cout << nmp_values.total_transfers << std::endl;
     return (nmp_values.total_transfers > 0 || nmp_values.nmp_buffer_queue > 0 || nmp_values.nmp_cycle_left > 0);
 }
 
@@ -50,8 +51,6 @@ bool NMP::RunNMPLogic(int complete_transactions)
         transaction_processed = true;
     }        
 
-    ClockTick();        
-
     return transaction_processed;
 }
 
@@ -83,13 +82,8 @@ void PIM::ClockTick()
         if(pim_cycle_left[i] > 0)
             pim_cycle_left[i]--;
     }
-}
-
-
-
-void PIM::InsertPIMInst(Transaction trans)
-{
-    instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+    clk_++;
+    ReadyPIMCommand();
 }
 
 void PIM::AddPIMCycle(Transaction trans)
@@ -97,6 +91,66 @@ void PIM::AddPIMCycle(Transaction trans)
     pim_cycle_left[trans.pim_values.batch_tag] += pim_cycle;
 }
 
+
+// void PIM::InsertPIMInst(Transaction trans)
+// {
+//     instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+// }
+
+
+// TODO : which BG PIM?? How to interact with command queue / controller?
+
+bool PIM::IssueRVector(Transaction& trans, uint64_t clk_)
+{
+    if(IsRVector(trans))
+    {
+        trans.complete_cycle = clk_+ 1;
+        return true;
+    }
+    return false;
+}
+
+bool PIM::InsertPIMInst(Transaction trans, uint64_t clk_)
+{
+    if(!IsRVector(trans) && !AddressInInstructionQueue(trans))
+    {
+        trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+        trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+        instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+        return true;
+    }
+    return false;
+}
+
+void PIM::ReadyPIMCommand()
+{
+    // issue from PIM
+    for(int i=0; i<batch_size; i++)
+    {
+        for(auto it = instruction_queue[i].begin(); it != instruction_queue[i].end(); it++)
+        {
+            if(CommandIssuable(*it, clk_))
+            {
+                // Transaction issue_trans = FetchInstructionToIssue(*it, clk_);
+                pim_read_queue[it->pim_values.batch_tag].insert({it->addr, 0});
+                instruction_queue[i].erase(it);
+                issue_queue.push_back(*it);
+                break;
+            }
+        }
+    }
+}
+
+Transaction PIM::IssueFromPIM()
+{
+    if(issue_queue.size() == 0)
+        return Transaction();
+
+    Transaction trans = issue_queue.front();
+    issue_queue.erase(issue_queue.begin());
+
+    return trans;
+}
 
 bool PIM::AddressInInstructionQueue(Transaction trans)
 {
@@ -143,17 +197,16 @@ bool PIM::DecodeInstruction(Transaction trans)
     // this might not be possible due to original cmd_queue functions related to the controller
 }
 
-Command PIM::GetCommandToIssue()
-{
-    // get command from pim dedicated command queue
-}
+// Command PIM::GetCommandToIssue()
+// {
+//     // get command from pim dedicated command queue
+// }
 
 std::pair<uint64_t, int> PIM::PullTransferTrans()
 {
     if(transfer_complete)
     {
         transfer_complete = false;
-        // std::cout << transferTrans.addr << std::endl;
         return std::make_pair(transferTrans.addr, transferTrans.is_write);
     }
     return std::make_pair(-1, -1);
@@ -166,10 +219,7 @@ bool PIM::RunALULogic(Transaction done_inst)
         if(AllSubVecReadComplete(done_inst))
         {
             if(!LastAdditionInProgress(done_inst))
-            {
                 AddPIMCycle(done_inst);
-                return false;
-            }
 
             if(PIMCycleComplete(done_inst))
             {
@@ -179,10 +229,8 @@ bool PIM::RunALULogic(Transaction done_inst)
                 transfer_complete = true;
                 return true;
             }
-            return false;
         }
-        else
-            return false;
+        return false;
     }
     else
     {
@@ -190,6 +238,7 @@ bool PIM::RunALULogic(Transaction done_inst)
         {
             if(done_inst.pim_values.is_r_vec)
             {
+                // potential problem
                 AddPIMCycle(done_inst);
                 return true;
             }

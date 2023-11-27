@@ -108,25 +108,20 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     PIMMem_complete_addr(-1),
     Mem_complete_addr(-1),
     num_rds(1),
-    num_ca_in_cycle(1)
+    num_ca_in_cycle(1),
+    recNMPCache((1 << 10) * 128, 64, 4)
 {
     PIMMem_config = memory_system_PIM.config_copy;
     Mem_config = memory_system_Mem.config_copy;
 
     channels = PIMMem_config->channels;
+    ranks = PIMMem_config->ranks;
     bankgroups = PIMMem_config->bankgroups;
-    is_using_HEAM = PIMMem_config->PIM_enabled;
+    is_using_rankNMP = PIMMem_config->NMP_enabled;
+    is_using_PIM = PIMMem_config->PIM_enabled;
     is_using_LUT = PIMMem_config->LUT_enabled;
     batch_size = PIMMem_config->batch_size;
     addrmapping = PIMMem_config->address_mapping;
-    if(!is_using_HEAM)
-        batch_size=1;
-
-    for(int i=0; i < channels*bankgroups; i++)
-    {
-        loads_per_bg.push_back(0);
-        loads_per_bg_for_q.push_back(0);
-    }
 
     CA_compression = PIMMem_config->CA_compression;
     if(CA_compression)
@@ -146,20 +141,96 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     LoadTrace(trace_file);
 
     std::cout << "------------ Info ------------" << std::endl;
-    std::cout << "- using HEAM : " << is_using_HEAM << std::endl;
+    std::cout << "- using HEAM : " << is_using_PIM << std::endl;
     std::cout << "- using LUT : " << is_using_LUT << std::endl;
     std::cout << "- CA compression : " << CA_compression << std::endl;
     std::cout << "- batch size : " << batch_size << std::endl;
     std::cout << "- addr mapping : " << addrmapping << std::endl;
 
-    int total_cycle = RunHEAM();
+    // TensorDIMM, SPACE
+    if(!(is_using_PIM || is_using_rankNMP))
+        batch_size=1;
+
+    // int total_cycle = RunRecNMP();
+    // // is_using_RecNMP = true;
+    // int killobyte = 1 << 10;
+    // int cache_size = killobyte * 128; //RecNMP uses 128KB cache
+    // Cache recNMPcache = Cache(cache_size, 64, 4);
+
     // int total_cycle = RunTRiM();
-    // int total_cycle = RunSPACE();
+    // is_using_TRiM = true;
+    for(int i=0; i < channels*bankgroups; i++)
+    {
+        loads_per_bg.push_back(0);
+        // loads_per_bg_for_q.push_back(0);
+    }
+
+    int total_cycle = RunSPACE();
+    is_using_SPACE = true;
+
+    // int total_cycle = RunHEAM();
+
 
     std::cout << "- total cycle : " << total_cycle << std::endl;
     std::cout << "-----------------------------" << std::endl;
 }
 
+
+int TraceBasedCPUForHeterogeneousMemory::RunTensorDIMM() {
+    NMP TensorDIMM_nmp = NMP(add_cycle);
+    int batch_start_index = 0;
+    int batch_tag = 0;
+    int total_batch = (int)PIMMem_transaction.size()/batch_size;
+    std::vector<int> PIMMem_vectors_left;
+    std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
+
+    for(int i=0; i < total_batch-1; i++)
+    {
+        batch_start_index = i*batch_size;
+        batch_tag = 0;
+        pim_transfer_address.clear();
+        std::vector<int>* Mem_vectors_left = NULL;
+        int total_transfers = UpdateBatchInfo(batch_start_index, PIMMem_vectors_left, pim_transfer_address);
+        TensorDIMM_nmp.SetTotalTransfers(total_transfers);
+        while(TensorDIMM_nmp.CheckNMPDone())
+        {
+            ClockTick();
+            TensorDIMM_nmp.ClockTick();
+            AddBatchTransactionsForRecNMP(batch_start_index, batch_tag, PIMMem_vectors_left, pim_transfer_address);
+            bool transaction_processed = TensorDIMM_nmp.RunNMPLogic(complete_transactions);
+        }
+        std::cout << i << " of " << total_batch << " processed" << std::endl;
+    }
+    return clk_PIM;
+}
+
+int TraceBasedCPUForHeterogeneousMemory::RunRecNMP() {
+    NMP Rec_nmp = NMP(add_cycle);
+    int batch_start_index = 0;
+    int batch_tag = 0;
+    int total_batch = (int)PIMMem_transaction.size()/batch_size;
+    std::vector<int> PIMMem_vectors_left;
+    std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
+
+    for(int i=0; i < total_batch-1; i++)
+    {
+        batch_start_index = i*batch_size;
+        batch_tag = 0;
+        pim_transfer_address.clear();
+        std::vector<int>* Mem_vectors_left = NULL;
+        int total_transfers = UpdateBatchInfo(batch_start_index, PIMMem_vectors_left, pim_transfer_address);
+        Rec_nmp.SetTotalTransfers(total_transfers);
+        while(Rec_nmp.CheckNMPDone())
+        {
+            ClockTick();
+            Rec_nmp.ClockTick();
+            AddBatchTransactionsForRecNMP(batch_start_index, batch_tag, PIMMem_vectors_left, pim_transfer_address);
+            bool transaction_processed = Rec_nmp.RunNMPLogic(complete_transactions);
+        }
+        std::cout << i << " of " << total_batch << " processed" << std::endl;
+    }
+    return clk_PIM;
+}
 
 int TraceBasedCPUForHeterogeneousMemory::RunTRiM() {
     NMP TRiM_nmp = NMP(add_cycle);
@@ -180,6 +251,7 @@ int TraceBasedCPUForHeterogeneousMemory::RunTRiM() {
         while(TRiM_nmp.CheckNMPDone())
         {
             ClockTick();
+            TRiM_nmp.ClockTick();
             AddBatchTransactions(batch_start_index, batch_tag, PIMMem_vectors_left, pim_transfer_address);
             bool transaction_processed = TRiM_nmp.RunNMPLogic(complete_transactions);
         }
@@ -210,6 +282,7 @@ int TraceBasedCPUForHeterogeneousMemory::RunSPACE() {
         while(SPACE_nmp.CheckNMPDone())
         {
             ClockTick();
+            SPACE_nmp.ClockTick();
             AddBatchTransactionsToHetero(batch_start_index, batch_tag, PIMMem_vectors_left, Mem_vectors_left, pim_transfer_address);
             bool transaction_processed = SPACE_nmp.RunNMPLogic(complete_transactions);
             if(transaction_processed)
@@ -244,76 +317,89 @@ int TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
         while(HEAM_nmp.CheckNMPDone())
         {
             ClockTick();
+            HEAM_nmp.ClockTick();
             AddBatchTransactionsToHetero(batch_start_index, batch_tag, PIMMem_vectors_left, Mem_vectors_left, pim_transfer_address);
             bool transaction_processed = HEAM_nmp.RunNMPLogic(complete_transactions);
             if(transaction_processed)
                 complete_transactions = 0;
         }
-        std::cout << i << " of " << total_batch << " processed" << std::endl;
+        // std::cout << i << " of " << total_batch << " processed" << std::endl;
     }
     return clk_PIM;
 }
 
+
 int TraceBasedCPUForHeterogeneousMemory::UpdateBatchInfoForHetero(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& pim_transfer_address){
     int total_memory_transfers = 0;
-    int total_transfers = 0;
+    int total_transfers_per_batch = 0;
 
     for(int i=0; i < batch_size; i++)
     {
         int emb_pool_idx = batch_start_idx + i;
-        int PIMMem_vectors = PIMMem_transaction[emb_pool_idx].size();     
+        int PIMMem_vectors = PIMMem_transaction[emb_pool_idx].size();
         int Mem_vectors = Mem_transaction[emb_pool_idx].size();
         PIMMem_vectors_left.push_back(PIMMem_vectors);
+        Mem_vectors = 0;
         Mem_vectors_left.push_back(Mem_vectors);
 
-        if(is_using_HEAM)
+        if(is_using_PIM)
         {
             std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
             ProfileVectorToTransfer(transfer_vectors_per_batch, batch_start_idx, i);
             pim_transfer_address.push_back(transfer_vectors_per_batch);
             int total_pim_transfers = 0;
-            for(int i=0; i < channels*bankgroups; i++)
+            for(int j=0; j < channels*bankgroups; j++)
             {
-                if(transfer_vectors_per_batch[i] != 0)
+                if(transfer_vectors_per_batch[j] != 0)
                     total_pim_transfers++;
             }
-            total_transfers = total_pim_transfers;
+            total_transfers_per_batch = total_pim_transfers;
         }
         else
         {
             std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
             pim_transfer_address.push_back(transfer_vectors_per_batch);
-            total_transfers = PIMMem_vectors;
+            total_transfers_per_batch = PIMMem_vectors;
         }
 
-        total_memory_transfers += (total_transfers + Mem_vectors);
+        total_memory_transfers += (total_transfers_per_batch + Mem_vectors);
     }
-    total_memory_transfers;
 
     return total_memory_transfers;
 }
 
 int TraceBasedCPUForHeterogeneousMemory::UpdateBatchInfo(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& pim_transfer_address){
     int total_memory_transfers = 0;
-    int total_transfers = 0;
+    int total_transfers_per_batch = 0;
 
     for(int i=0; i < batch_size; i++)
     {
         int emb_pool_idx = batch_start_idx + i;
         int PIMMem_vectors = PIMMem_transaction[emb_pool_idx].size();     
         PIMMem_vectors_left.push_back(PIMMem_vectors);
-        std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
-        ProfileVectorToTransfer(transfer_vectors_per_batch, batch_start_idx, i);
-        pim_transfer_address.push_back(transfer_vectors_per_batch);
-
-        int total_pim_transfers = 0;
-        for(int i=0; i < channels*bankgroups; i++)
+        if(is_using_PIM)
         {
-            if(transfer_vectors_per_batch[i] != 0)
-                total_pim_transfers++;
+            std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
+            ProfileVectorToTransfer(transfer_vectors_per_batch, batch_start_idx, i);
+            pim_transfer_address.push_back(transfer_vectors_per_batch);
+            int total_pim_transfers = 0;
+            for(int j=0; j < channels*bankgroups; j++)
+            {
+                if(transfer_vectors_per_batch[j] != 0)
+                    total_pim_transfers++;
+            }
+
+            total_transfers_per_batch = total_pim_transfers;
+        }
+        else
+        {
+            std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
+            pim_transfer_address.push_back(transfer_vectors_per_batch);
+            total_transfers_per_batch = PIMMem_vectors;
+
         }
 
-        total_memory_transfers += total_pim_transfers;
+        total_memory_transfers += total_transfers_per_batch;
     }
 
     return total_memory_transfers;
@@ -323,16 +409,39 @@ void TraceBasedCPUForHeterogeneousMemory::ProfileVectorToTransfer(std::unordered
     int emb_pool_idx = batch_start_idx + batch_idx;
     for (int i = 0; i < PIMMem_transaction[emb_pool_idx].size(); i++) {
         uint64_t addr = std::get<0>(PIMMem_transaction[emb_pool_idx][i]);
-        int bg_idx = PIMMemGetChannel(addr)*bankgroups + PIMMemGetBankGroup(addr);
-        if(is_using_LUT) 
-        {
-            if(std::get<1>(PIMMem_transaction[emb_pool_idx][i]) != 'r') // check only q vectors
-                transfer_vectors[bg_idx] = addr; // Storing the last address for each bank group
+        int index;
+
+        if (is_using_rankNMP) {
+            // Calculate index based on rank
+            index = PIMMemGetChannel(addr) * ranks + PIMMemGetRank(addr);
+        } else {
+            // Calculate index based on bank group
+            index = PIMMemGetChannel(addr) * bankgroups + PIMMemGetBankGroup(addr);
         }
-        else
-            transfer_vectors[bg_idx] = addr;
+
+        if(is_using_LUT) {
+            if(std::get<1>(PIMMem_transaction[emb_pool_idx][i]) != 'r') // check only q vectors
+                transfer_vectors[index] = addr; // Storing the last address for each rank or bank group
+        } else {
+            transfer_vectors[index] = addr;
+        }
     }
 }
+
+// void TraceBasedCPUForHeterogeneousMemory::ProfileVectorToTransfer(std::unordered_map<int, uint64_t>& transfer_vectors, int batch_start_idx, int batch_idx) {
+//     int emb_pool_idx = batch_start_idx + batch_idx;
+//     for (int i = 0; i < PIMMem_transaction[emb_pool_idx].size(); i++) {
+//         uint64_t addr = std::get<0>(PIMMem_transaction[emb_pool_idx][i]);
+//         int bg_idx = PIMMemGetChannel(addr)*bankgroups + PIMMemGetBankGroup(addr);
+//         if(is_using_LUT) 
+//         {
+//             if(std::get<1>(PIMMem_transaction[emb_pool_idx][i]) != 'r') // check only q vectors
+//                 transfer_vectors[bg_idx] = addr; // Storing the last address for each bank group
+//         }
+//         else
+//             transfer_vectors[bg_idx] = addr;
+//     }
+// }
 
 void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactionsToHetero(int batch_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, 
                                                                 std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address)
@@ -356,6 +465,25 @@ void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactions(int batch_index, 
         batch_tag++;
 }
 
+void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactionsForRecNMP(int batch_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address)
+{
+    // Check if all batches are processed
+    if(batch_tag >= batch_size)
+        return;
+
+    // Process transactions in an interleaved manner
+    for(int i = 0; i < batch_size; i++) {
+        int current_batch = (batch_index + i) % batch_size;
+        if(PIMMem_vectors_left[current_batch] > 0) {
+            AddTransactionsToPIMMem(current_batch, batch_tag, PIMMem_vectors_left[current_batch], pim_transfer_address[current_batch]);
+        }
+    }
+
+    // Increment batch_tag if the current batch is fully processed
+    if(PIMMem_vectors_left[batch_tag] == 0)
+        batch_tag++;
+}
+
 void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx, int batch_tag, int& PIM_vectors_left, std::unordered_map<int, uint64_t> pim_transfer_address)
 {
     if(PIM_vectors_left <= 0)
@@ -363,7 +491,7 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
 
     int emb_pool_idx = batch_idx+batch_tag;
     int total_trans = PIMMem_transaction[emb_pool_idx].size();
-    // ReorderHBMTransaction(emb_pool_idx);
+    ReorderHBMTransaction(emb_pool_idx);
     bool insert_to_all_channel = false;
     int last_channel = -1;
     std::vector<int> trans_per_channel;
@@ -405,16 +533,28 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
         if (PIM_mem_get_next_) {
             int bg_idx = PIMMemGetChannel(target_addr)*bankgroups + PIMMemGetBankGroup(target_addr);
             bool is_r_vec = is_using_LUT && vec_class == 'r';
-            bool is_transfer_vec = (is_using_HEAM || is_using_TRiM) && !is_r_vec && (pim_transfer_address.at(bg_idx) == target_addr);
+            bool is_transfer_vec = (is_using_PIM || is_using_TRiM) && !is_r_vec && (pim_transfer_address.at(bg_idx) == target_addr);
             bool is_last_subvec = (subvec_idx == (num_rds-1));
             uint64_t start_addr = target_addr + 64*((num_rds-1) - subvec_idx);
 
             PimValues pim_values(0, is_transfer_vec, is_r_vec, false, batch_tag, num_rds, is_last_subvec, start_addr);
 
-            if(is_using_HEAM)
+            if(is_using_PIM)
             {
                 if(is_transfer_vec)
                     PIMMem_address_in_processing.push_back(target_addr);
+            }
+            else if(is_using_RecNMP)
+            {
+                 if(vec_class == 'h')
+                 {
+                    bool hit = recNMPCache.access(target_addr);                   
+                    if(hit)
+                    {
+                        PIM_vectors_left--;
+                        continue;
+                    }
+                 }
             }
             else if(is_using_TRiM)
             {
@@ -447,6 +587,34 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(int batch_idx,
         trans_per_channel.push_back(0);
     }
 
+    int emb_pool_idx = batch_idx+batch_tag;
+    if(is_using_TensorDIMM)
+    {
+        while(true)
+        {
+            int target_vec_idx = Mem_vectors_left-1;
+            if(target_vec_idx < 0)
+                return;
+
+            uint64_t target_addr = std::get<0>(Mem_transaction[emb_pool_idx][target_vec_idx]);
+            bool Mem_get_next_ = memory_system_Mem.WillAcceptTransaction(target_addr, false);
+            // int curr_channel = MemGetChannel(target_addr);
+            int subvec_idx = std::get<2>(PIMMem_transaction[emb_pool_idx][target_vec_idx]);
+
+            if (Mem_get_next_) {
+                PimValues pim_values;
+                memory_system_Mem.AddTransaction(target_addr, false, pim_values);
+                Mem_address_in_processing.push_back(target_addr);
+                Mem_vectors_left--;
+                // std::cout << "mem vectors left : " << Mem_vectors_left << std::endl;
+            }
+
+            if(subvec_idx == (num_rds-1))
+                break;
+        }
+    }
+    else
+    {
     // while(true)
     // {
         // if(Mem_vectors_left <= 0)
@@ -479,6 +647,10 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(int batch_idx,
             // std::cout << "mem vectors left : " << Mem_vectors_left << std::endl;
         }
     // }
+
+    }
+
+
 }
 
 void TraceBasedCPUForHeterogeneousMemory::ReadCallBack_PIMMem(uint64_t addr)
@@ -595,6 +767,11 @@ int TraceBasedCPUForHeterogeneousMemory::PIMMemGetChannel(uint64_t address) {
     return addr.channel;
 }
 
+int TraceBasedCPUForHeterogeneousMemory::PIMMemGetRank(uint64_t address) {
+    Address addr = PIMMem_config->AddressMapping(address);
+    return addr.rank;
+}
+
 int TraceBasedCPUForHeterogeneousMemory::MemGetBankGroup(uint64_t address) {
     Address addr = Mem_config->AddressMapping(address);
     return addr.bankgroup;
@@ -690,3 +867,76 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
 }
 
 }  // namespace dramsim3
+
+
+
+
+
+// int TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
+
+//     std::vector<int> HBM_vectors_left;
+//     std::vector<int> DIMM_vectors_left;
+//     std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
+//     int batch_start_index = 0;
+//     int memory_transfers = 0;
+//     int nmp_cycle_left = 0;
+//     int nmp_buffer_queue = 0;
+//     int batch_tag = 0;
+//     int total_batch = (int)PIMMem_transaction.size()/batch_size;
+
+//     for(int i=0; i < total_batch-1; i++)
+//     {
+//         batch_start_index = i*batch_size;
+//         batch_tag = 0;
+//         HBM_vectors_left.clear();
+//         DIMM_vectors_left.clear();
+//         pim_transfer_address.clear();
+//         int memory_transfers = UpdateBatchInfoForHetero(batch_start_index, HBM_vectors_left, DIMM_vectors_left, pim_transfer_address);
+//         // std::cout << "mem transfers left : " << memory_transfers << std::endl;
+
+//         while(memory_transfers > 0 || nmp_buffer_queue > 0 || nmp_cycle_left > 0)
+//         {
+//             ClockTick();
+//             AddBatchTransactionsToHetero(batch_start_index, batch_tag, HBM_vectors_left, DIMM_vectors_left, pim_transfer_address);
+
+//             if(nmp_cycle_left > 0)
+//                 nmp_cycle_left--;
+//             else
+//             {
+//                 if(nmp_buffer_queue > 0)
+//                 {
+//                     nmp_buffer_queue--;
+//                     nmp_cycle_left = add_cycle;
+//                 }
+//             }
+
+//             if(complete_transactions > 0)
+//             {
+//                 if(nmp_cycle_left > 0)
+//                     nmp_buffer_queue += complete_transactions;
+//                 else
+//                 {
+//                     nmp_cycle_left = add_cycle;
+//                     if(complete_transactions > 1)
+//                         nmp_buffer_queue += (complete_transactions-1);
+//                 }
+//                 memory_transfers -= complete_transactions;
+//                 complete_transactions = 0;
+//             }                
+//         // std::cout << "mem transfers left : " << memory_transfers << std::endl;
+//         }
+//         ////////// For DEBUG ////////////
+//         // // if(i%1024 == 0)
+//         // std::cout << i << " of " << total_batch << " processed" << std::endl;
+
+//         // for(int i=0; i < loads_per_bg.size(); i++)
+//         // {
+//         //     std::cout << "bg " << i << " / load : " << loads_per_bg[i] << std::endl;
+//         //     std::cout << "bg " << i << " / q load : " << loads_per_bg_for_q[i] << std::endl;
+//         //     loads_per_bg[i] = 0;
+//         //     loads_per_bg_for_q[i] = 0;
+//         // }
+//     }
+
+//     return clk_PIM;
+// }

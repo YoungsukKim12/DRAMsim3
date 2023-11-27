@@ -168,11 +168,13 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                     timing_
                         .other_bankgroups_same_rank[static_cast<int>(cmd.cmd_type)],
                     clk);
-
-                // Other ranks
-                UpdateOtherRanksTiming(
-                    cmd.addr, timing_.other_ranks[static_cast<int>(cmd.cmd_type)],
-                    clk);
+                if(!config_.NMP_enabled)
+                {
+                    // Other ranks
+                    UpdateOtherRanksTiming(
+                        cmd.addr, timing_.other_ranks[static_cast<int>(cmd.cmd_type)],
+                        clk);
+                }
             }
             break;
         case CommandType::REFRESH:

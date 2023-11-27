@@ -10,6 +10,7 @@
 #include "common.h"
 #include "pim.h"
 #include <tuple>
+#include "cache_.h"
 
 namespace dramsim3 {
 
@@ -106,6 +107,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
 
     int PIMMemGetBankGroup(uint64_t address);
     int PIMMemGetChannel(uint64_t address);
+    int PIMMemGetRank(uint64_t address);
     int MemGetBankGroup(uint64_t address);
     int MemGetChannel(uint64_t address);
     void LoadTrace(string filename);
@@ -128,6 +130,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
 
     void AddBatchTransactionsToHetero(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
     void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
+    void AddBatchTransactionsForRecNMP(int batch_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address);
     void AddTransactionsToPIMMem(int batch_start_idx, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
     void AddTransactionsToMemory(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
     void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
@@ -157,13 +160,18 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     uint64_t PIMMem_complete_addr;
     uint64_t Mem_complete_addr;
 
-    bool is_using_hetero;
-    bool is_using_HEAM;
-    bool is_using_LUT;
     bool CA_compression;
+    bool is_using_TensorDIMM;
+    bool is_using_RecNMP;
     bool is_using_TRiM;
+    bool is_using_SPACE;
+    bool is_using_rankNMP;
+    bool is_using_PIM;
+    bool is_using_LUT;
+
     int num_rds;
     int channels;
+    int ranks;
     int bankgroups;
     int vec_transfers;
     int batch_size;
@@ -171,6 +179,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     std::string addrmapping;
     std::vector<int> loads_per_bg;
     std::vector<int> loads_per_bg_for_q;
+    Cache recNMPCache;
 
 };
 

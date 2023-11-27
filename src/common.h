@@ -155,30 +155,34 @@ struct PimValues {
 };
 
 struct Transaction {
-    Transaction() {}
+    Transaction(): non_trans(true) {}
     Transaction(uint64_t addr, bool is_write)
         : addr(addr),
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
+          non_trans(false),
           pim_values() {}
     Transaction(const Transaction& tran)
         : addr(tran.addr),
           added_cycle(tran.added_cycle),
           complete_cycle(tran.complete_cycle),
           is_write(tran.is_write),
+          non_trans(false),
           pim_values(tran.pim_values) {}
     Transaction(uint64_t addr, bool is_write, PimValues pim_values_)
         : addr(addr),
           added_cycle(0),
           complete_cycle(0),
           is_write(is_write),
+          non_trans(false),
           pim_values(pim_values_) {}
 
     uint64_t addr;
     uint64_t added_cycle;
     uint64_t complete_cycle;
     bool is_write;
+    bool non_trans;
 
     // PIM parameters
     PimValues pim_values;
