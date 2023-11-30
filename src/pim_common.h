@@ -5,7 +5,10 @@
 #include <vector>
 
 struct NMPValues{
-    NMPValues(){}
+    NMPValues()
+          : nmp_cycle_left(0),
+            nmp_buffer_queue(0),
+            total_transfers(0) {}
     NMPValues(int nmpCycleLeft, int nmpBufferQueue, int totalTransfers)
         : nmp_cycle_left(nmpCycleLeft), 
           nmp_buffer_queue(nmpBufferQueue),

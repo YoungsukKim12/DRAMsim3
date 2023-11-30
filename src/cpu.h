@@ -128,9 +128,10 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int UpdateBatchInfoForHetero(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
     int UpdateBatchInfo(int batch_start_idx, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>>& vector_transfer_address);
 
+    void AddSingleBatchTransactions(int batch_start_index, int& vectors_left);
     void AddBatchTransactionsToHetero(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<int>& Mem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
     void AddBatchTransactions(int batch_start_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> vector_transfer_address);
-    void AddBatchTransactionsForRecNMP(int batch_index, int& batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address);
+    // void AddBatchTransactionsForRecNMP(int batch_index, int batch_tag, std::vector<int>& PIMMem_vectors_left, std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address);
     void AddTransactionsToPIMMem(int batch_start_idx, int batch_tag, int& HBM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);
     void AddTransactionsToMemory(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
     void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
@@ -168,6 +169,9 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     bool is_using_rankNMP;
     bool is_using_PIM;
     bool is_using_LUT;
+    bool is_using_HEAM;
+
+    int cache_hit_on_transfer_vec=0;
 
     int num_rds;
     int channels;

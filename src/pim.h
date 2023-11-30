@@ -32,7 +32,7 @@ class PIM {
         void ClockTick();
 
         // buffer functions
-        // void InsertPIMInst(Transaction trans);
+        void InsertPIMInst(Transaction trans);
         bool AddressInInstructionQueue(Transaction trans);
 
         // decode functions
@@ -59,7 +59,7 @@ class PIM {
         std::pair<uint64_t, int> PullTransferTrans();
 
         void ReadyPIMCommand();
-        bool InsertPIMInst(Transaction trans, uint64_t clk_);
+        // bool InsertPIMInst(Transaction trans, uint64_t clk_);
         bool IssueRVector(Transaction& trans, uint64_t clk_);
         Transaction IssueFromPIM();
 

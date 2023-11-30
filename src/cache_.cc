@@ -1,4 +1,5 @@
 #include "cache_.h"
+#include <iostream>
 
 // Constructor for CacheBlock
 CacheBlock::CacheBlock(int tag) : tag(tag), lru_counter(0) {}
@@ -13,14 +14,21 @@ CacheSet::~CacheSet() {
     }
 }
 
+void CacheSet::update_lru_counters(CacheBlock* accessed_block) {
+    for (auto& block : blocks) {
+        if (block && block != accessed_block && block->lru_counter < accessed_block->lru_counter) {
+            block->lru_counter++;
+        }
+    }
+    accessed_block->lru_counter = 0;
+}
+
 // Access a block in the cache set
 bool CacheSet::access_block(int tag) {
-    // Check for hit and update LRU counter
-    for (auto& block : blocks) {
-        if (block && block->tag == tag) {
-            block->lru_counter = 0;
-            return true; // Cache hit
-        }
+    auto it = block_map.find(tag);
+    if (it != block_map.end()) {
+        update_lru_counters(it->second);
+        return true; // Cache hit
     }
 
     // Cache miss, load the block
@@ -30,35 +38,24 @@ bool CacheSet::access_block(int tag) {
 
 // Load a block into the cache set
 void CacheSet::load_block(int tag) {
-    // Find the least recently used block or an empty block
     CacheBlock* lru_block = nullptr;
     int max_lru = -1;
     for (auto& block : blocks) {
-        if (block && (block->lru_counter > max_lru || lru_block == nullptr)) {
+        if (!block) {
+            block = new CacheBlock(tag);
+            block_map[tag] = block;
+            return;
+        } else if (block->lru_counter > max_lru) {
             lru_block = block;
             max_lru = block->lru_counter;
         }
     }
 
-    if (lru_block) {
-        lru_block->tag = tag;
-        lru_block->lru_counter = 0;
-    } else {
-        // If there's an empty slot, use it
-        for (auto& block : blocks) {
-            if (block == nullptr) {
-                block = new CacheBlock(tag);
-                return;
-            }
-        }
-    }
-
-    // Update LRU counters
-    for (auto& block : blocks) {
-        if (block) {
-            block->lru_counter++;
-        }
-    }
+    // Replace the LRU block
+    block_map.erase(lru_block->tag);
+    lru_block->tag = tag;
+    block_map[tag] = lru_block;
+    update_lru_counters(lru_block);
 }
 
 // Constructor for Cache
@@ -76,15 +73,15 @@ bool Cache::access(int address) {
     int set_index = (address / block_size) % sets.size();
 
     if (sets[set_index].access_block(tag)) {
-        hits++;
+        // hits++;
         return true;
     } else {
-        misses++;
+        // misses++;
         return false;
     }
 }
 
-// Calculate the hit rate of the cache
-double Cache::hit_rate() const {
-    return hits + misses > 0 ? static_cast<double>(hits) / (hits + misses) : 0;
-}
+// // Calculate the hit rate of the cache
+// double Cache::hit_rate() const {
+//     return hits + misses > 0 ? static_cast<double>(hits) / (hits + misses) : 0;
+// }

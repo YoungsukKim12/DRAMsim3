@@ -206,6 +206,7 @@ bool CommandQueue::AddCommand(Command cmd) {
         rank_q_empty[cmd.Rank()] = false;
         return true;
     } else {
+        std::cout << "failed command add : " << cmd.hex_addr << std::endl;
         return false;
     }
 }

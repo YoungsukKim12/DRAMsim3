@@ -3,6 +3,7 @@
 
 #include <vector>
 #include <map>
+#include <unordered_map>
 
 class CacheBlock {
 public:
@@ -15,12 +16,14 @@ public:
 class CacheSet {
 private:
     std::vector<CacheBlock*> blocks;
+    std::unordered_map<int, CacheBlock*> block_map;
 
 public:
     CacheSet(int associativity);
     ~CacheSet();
     bool access_block(int tag);
     void load_block(int tag);
+    void update_lru_counters(CacheBlock* accessed_block);
 };
 
 class Cache {
@@ -33,7 +36,7 @@ private:
 public:
     Cache(int size, int block_size, int associativity);
     bool access(int address);
-    double hit_rate() const;
+    // double hit_rate() const;
 };
 
 #endif // CACHE_H

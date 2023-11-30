@@ -80,7 +80,7 @@ class Controller {
     // transaction queueing
     int write_draining_;
     void ScheduleTransaction();
-    void SchdeulePIMTransaction();
+    // void SchdeulePIMTransaction();
     void IssueCommand(const Command &tmp_cmd);
     Command TransToCommand(const Transaction &trans);
     void UpdateCommandStats(const Command &cmd);

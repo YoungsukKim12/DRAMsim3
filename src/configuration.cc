@@ -49,7 +49,6 @@ uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co)
     addr += ba << ba_pos;
     addr += ro << ro_pos;
     addr += co << co_pos;
-
     return addr;
 }
 
@@ -374,7 +373,7 @@ void Config::SetAddressMapping() {
     shift_bits = LogBase2(request_size_bytes);
     int col_low_bits = LogBase2(BL);
     int actual_col_bits = LogBase2(columns) - col_low_bits;
-
+    // std::cout << "total col bits : " << actual_col_bits + col_low_bits << " col low bits : " << col_low_bits << std::endl;
     // has to strictly follow the order of chan, rank, bg, bank, row, col
     std::map<std::string, int> field_widths;
     field_widths["ch"] = LogBase2(channels);

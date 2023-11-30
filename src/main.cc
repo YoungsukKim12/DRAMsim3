@@ -73,7 +73,7 @@ int main(int argc, const char **argv) {
 //    for (uint64_t clk = 0; clk < cycles; clk++) {
 //        cpu->ClockTick();
 //    }
-//    cpu->PrintStats();
+   cpu->PrintStats();
 
     delete cpu;
 

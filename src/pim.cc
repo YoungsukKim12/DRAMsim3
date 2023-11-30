@@ -15,7 +15,7 @@ void NMP::SetTotalTransfers(int transfers)
 
 bool NMP::CheckNMPDone()
 {
-    // std::cout << nmp_values.total_transfers << std::endl;
+    // std::cout << nmp_values.total_transfers << " "<< nmp_values.nmp_buffer_queue << " "<< nmp_values.nmp_cycle_left << std::endl;
     return (nmp_values.total_transfers > 0 || nmp_values.nmp_buffer_queue > 0 || nmp_values.nmp_cycle_left > 0);
 }
 
@@ -92,10 +92,10 @@ void PIM::AddPIMCycle(Transaction trans)
 }
 
 
-// void PIM::InsertPIMInst(Transaction trans)
-// {
-//     instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-// }
+void PIM::InsertPIMInst(Transaction trans)
+{
+    instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+}
 
 
 // TODO : which BG PIM?? How to interact with command queue / controller?
@@ -110,17 +110,17 @@ bool PIM::IssueRVector(Transaction& trans, uint64_t clk_)
     return false;
 }
 
-bool PIM::InsertPIMInst(Transaction trans, uint64_t clk_)
-{
-    if(!IsRVector(trans) && !AddressInInstructionQueue(trans))
-    {
-        trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-        trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
-        instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-        return true;
-    }
-    return false;
-}
+// bool PIM::InsertPIMInst(Transaction trans, uint64_t clk_)
+// {
+//     if(!IsRVector(trans) && !AddressInInstructionQueue(trans))
+//     {
+//         trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+//         trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+//         instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+//         return true;
+//     }
+//     return false;
+// }
 
 void PIM::ReadyPIMCommand()
 {
@@ -168,6 +168,11 @@ bool PIM::CommandIssuable(Transaction trans, uint64_t clk)
     std::vector<Transaction>& inst_queue = instruction_queue[trans.pim_values.batch_tag];
     for (auto it = inst_queue.begin(); it != inst_queue.end(); it++) 
     {
+        // if(trans.addr == it->addr)
+        // {
+        //     std::cout << trans.addr << std::endl;
+        //     std::cout << std::max((it->pim_values).skewed_cycle,(it->pim_values).decode_cycle) << " " << clk << std::endl; 
+        // }
         if(trans.addr == it->addr && std::max((it->pim_values).skewed_cycle,(it->pim_values).decode_cycle) <= clk)
             return true;
     }
@@ -204,9 +209,20 @@ bool PIM::DecodeInstruction(Transaction trans)
 
 std::pair<uint64_t, int> PIM::PullTransferTrans()
 {
+    // int tot = 0;
+    // for (int i=0; i<4; i++)
+    // {
+    //     std::map<uint64_t, int>& bg_read_queue = pim_read_queue[i];
+    //     tot += bg_read_queue.size();
+    // }
+    // if(tot > 300)
+    //     std::cout << tot << std::endl;
+
+
     if(transfer_complete)
     {
         transfer_complete = false;
+        // std:: cout << transferTrans.addr << std::endl;
         return std::make_pair(transferTrans.addr, transferTrans.is_write);
     }
     return std::make_pair(-1, -1);
@@ -216,8 +232,14 @@ bool PIM::RunALULogic(Transaction done_inst)
 {
     if(IsTransferTrans(done_inst))
     {
+        // if(IsRVector(done_inst) && done_inst.pim_values.is_last_subvec)
+        // {
+        //     // std::cout << "r vec done inst" << std::endl;
+        //     return true;            
+        // }
         if(AllSubVecReadComplete(done_inst))
         {
+
             if(!LastAdditionInProgress(done_inst))
                 AddPIMCycle(done_inst);
 
@@ -314,9 +336,6 @@ bool PIM::AllSubVecReadComplete(Transaction trans)
     {
         if(trans.addr == it->first)
         {
-            // if(trans.pim_values.is_last_subvec)
-            //     std::cout << trans.pim_values.start_addr << " " << bg_read_queue.size() << " " << it->second << std::endl;
-
             if(it->second == (trans.pim_values.num_rds-1))
                 return true;            
         }
