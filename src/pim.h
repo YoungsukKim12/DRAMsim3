@@ -59,8 +59,9 @@ class PIM {
         std::pair<uint64_t, int> PullTransferTrans();
 
         void ReadyPIMCommand();
-        // bool InsertPIMInst(Transaction trans, uint64_t clk_);
-        bool IssueRVector(Transaction& trans, uint64_t clk_);
+        bool TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression);
+        Transaction PIM::DecompressPIMInst(Transaction& trans, uint64_t clk_, std::string inst_type, int subvec_idx);
+        std::vector<Transaction> IssueRVector(Transaction& trans, uint64_t clk_, bool ca_compression);
         Transaction IssueFromPIM();
 
     private:

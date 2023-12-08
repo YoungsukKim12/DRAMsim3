@@ -380,18 +380,27 @@ int TraceBasedCPUForHeterogeneousMemory::UpdateBatchInfoForHetero(int batch_star
         Mem_vectors = 0; // ?????
         Mem_vectors_left.push_back(Mem_vectors);
 
+        std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
+        int total_pim_transfers = 0;
+
         if(is_using_PIM || is_using_rankNMP)
         {
-            std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
             ProfileVectorToTransfer(transfer_vectors_per_batch, batch_start_idx, i);
             pim_transfer_address.push_back(transfer_vectors_per_batch);
-            int total_pim_transfers = 0;
             for(int j=0; j < channels*bankgroups; j++)
             {
                 if(transfer_vectors_per_batch[j] != 0)
                     total_pim_transfers++;
             }
             total_transfers_per_batch = total_pim_transfers;
+        }
+        else if(is_using_RecNMP)
+        {
+            for(int j=0; j < channels*ranks; j++)
+            {
+                if(transfer_vectors_per_batch[j] != 0)
+                    total_pim_transfers++;
+            }
         }
         else
         {

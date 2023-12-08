@@ -232,13 +232,12 @@ void Controller::ClockTick() {
             }
         }
     }
-    ScheduleTransaction();
 
+    if(config_.PIM_enabled || config_.NMP_enabled)
+        SchedulePIMTransaction();
+    else
+        ScheduleTransaction();
 
-    // if(config_.PIM_enabled || config_.NMP_enabled)
-    //     SchdeulePIMTransaction();
-    // else
-    //    ScheduleTransaction();
     clk_++;
     cmd_queue_.ClockTick();
     simple_stats_.Increment("num_cycles");
@@ -293,7 +292,6 @@ bool Controller::AddTransaction(Transaction trans) {
                 unified_queue_.push_back(trans);
             } else {
                 read_queue_.push_back(trans);
-
             }
         // }
         return true;
@@ -302,102 +300,68 @@ bool Controller::AddTransaction(Transaction trans) {
 
 // Interaction between MC extension and PIM units
 // Command queue is utilized as a part of the PIM queue to meet the compatibility of DRAMSim3
-// void Controller::SchdeulePIMTransaction(){
-//     if (write_draining_ == 0 && !is_unified_queue_) {
-//         // we basically have a upper and lower threshold for write buffer
-//         if ((write_buffer_.size() >= write_buffer_.capacity()) ||
-//             (write_buffer_.size() > 8 && cmd_queue_.QueueEmpty())) {
-//             write_draining_ = write_buffer_.size();
-//         }
-//     }
-//     std::vector<Transaction> &queue =
-//         is_unified_queue_ ? unified_queue_
-//                           : write_draining_ > 0 ? write_buffer_ : read_queue_;    
+void Controller::SchedulePIMTransaction(){
+    if (write_draining_ == 0 && !is_unified_queue_) {
+        // we basically have a upper and lower threshold for write buffer
+        if ((write_buffer_.size() >= write_buffer_.capacity()) ||
+            (write_buffer_.size() > 8 && cmd_queue_.QueueEmpty())) {
+            write_draining_ = write_buffer_.size();
+        }
+    }
+    std::vector<Transaction> &nmp_queue =
+        is_unified_queue_ ? unified_queue_
+                          : write_draining_ > 0 ? write_buffer_ : read_queue_;    
 
-//     for (auto it = queue.begin(); it != queue.end(); it++) {
-//         Address addrmap = config_.AddressMapping(it->addr);
-//         PIM& pim_ = pims_[addrmap.bankgroup];
-//         // Assume r vector is pushed into R queue of PIM
-//         bool r_vec = pim_.IssueRVector(*it, clk_);
-//         if(r_vec)
-//         {
-//             return_queue_.push_back(*it);
-//             queue.erase(it);
-//             break; // insert one PIM-Inst per cycle if CA compression not applied
-//         }
-//         bool success = pim_.InsertPIMInst(*it, clk_);
-//         if(success)
-//             break;
-//     }
+    // push inst from nmp queue to pim queue
+    for (auto it = nmp_queue.begin(); it != nmp_queue.end(); it++) {
+        Address addrmap = config_.AddressMapping(it->addr);
+        PIM& pim_ = pims_[addrmap.bankgroup];
+        // Assume r vector is pushed into R queue of PIM
+        std::vector<Transaction> r_trans = pim_.IssueRVector(*it, clk_, config_.CA_compression);
+        if(!r_trans.empty())
+        {
+            for(auto trans_it = r_trans.begin(); it != r_trans.end(); trans_it++)
+            {
+                return_queue_.push_back(*trans_it);
+            }
+            nmp_queue.erase(it);
+            break; // insert one PIM-Inst per cycle if CA compression not applied
+        }
+        else // q trans
+        {
+            // insert PIM inst to pim queue
+            bool success = pim_.TryInsertPIMInst(*it, clk_, config_.CA_compression);
+            if(success)
+            {
+                nmp_queue.erase(it); 
+                break;
+            }
+        }
+    }
 
+    // issue from PIM queue
+    int total_pims = config_.NMP_enabled ? config_.ranks : config_.bankgroups;
+    for(int i=0; i<total_pims; i++)
+    {
+        PIM& pim_ = pims_[i];
+        Transaction trans = pim_.IssueFromPIM();
+        if(trans.non_trans)
+            continue;
 
-//     for(int i=0; i<config_.bankgroups; i++)
-//     {
-//         PIM& pim_ = pims_[i];
-//         Transaction trans = pim_.IssueFromPIM();
-//         if(trans.non_trans)
-//             continue;
-
-//         auto cmd = TransToCommand(trans);
-//         cmd_queue_.AddCommand(cmd);
-
-
-//         for (auto it = queue.begin(); it != queue.end(); it++) {
-//             if((it->addr == trans.addr) && (it->pim_values.batch_tag == trans.pim_values.batch_tag)) {
-//                 auto cmd = TransToCommand(trans);
-//                 if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(), cmd.Bank())) {
-//                     if (!is_unified_queue_ && cmd.IsWrite()) {
-//                         // Enforce R->W dependency
-//                         if (pending_rd_q_.count(it->addr) > 0) {
-//                             write_draining_ = 0;
-//                             break;
-//                         }
-//                         write_draining_ -= 1;
-//                     }
-//                     // cmd_queue_.AddCommand(cmd);
-//                     queue.erase(it); 
-//                     break;
-//                 }
-//             }
-//         }
-//     }
-
-//     // for (auto it = queue.begin(); it != queue.end(); it++) {
-//     //     auto cmd = TransToCommand(*it);
-//     //     // std::cout << cmd.hex_addr << std::endl;
-//     //     if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
-//     //                                     cmd.Bank())) {
-//     //         if (!is_unified_queue_ && cmd.IsWrite()) {
-//     //             // Enforce R->W dependency
-//     //             if (pending_rd_q_.count(it->addr) > 0) {
-//     //                 write_draining_ = 0;
-//     //                 break;
-//     //             }
-//     //             write_draining_ -= 1;
-//     //         }
-//     //         Address addrmap = config_.AddressMapping(it->addr);
-//     //         PIM& pim_ = pims_[addrmap.bankgroup];
-//     //         if(pim_.AddressInInstructionQueue(*it))
-//     //         {
-//     //             if(pim_.CommandIssuable(*it, clk_))
-//     //             {
-//     //                 Transaction issue_trans = pim_.FetchInstructionToIssue(*it, clk_);
-//     //                 Command cmd = TransToCommand(issue_trans);
-//     //                 cmd_queue_.AddCommand(cmd);
-//     //                 queue.erase(it); 
-//     //                 break;
-//     //             }
-//     //         }
-//     //     }
-//     // }
-
-//     if(config_.CA_compression)
-//     {
-
-
-
-//     }
-// }
+        auto cmd = TransToCommand(trans);
+        if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(), cmd.Bank())) {
+            if (!is_unified_queue_ && cmd.IsWrite()) {
+                // Enforce R->W dependency
+                if (pending_rd_q_.count(cmd.hex_addr) > 0) {
+                    write_draining_ = 0;
+                    break;
+                }
+                write_draining_ -= 1;
+            }
+            cmd_queue_.AddCommand(cmd);
+        }
+    }
+}
 
 void Controller::ScheduleTransaction() {
     // determine whether to schedule read or write

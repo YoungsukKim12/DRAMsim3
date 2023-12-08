@@ -97,34 +97,78 @@ void PIM::InsertPIMInst(Transaction trans)
     instruction_queue[trans.pim_values.batch_tag].push_back(trans);
 }
 
-
-// TODO : which BG PIM?? How to interact with command queue / controller?
-
-bool PIM::IssueRVector(Transaction& trans, uint64_t clk_)
+Transaction PIM::DecompressPIMInst(Transaction& trans, uint64_t clk_, std::string inst_type, int subvec_idx)
 {
+    // set common values
+    Transaction sub_vec_trans = trans;
+    sub_vec_trans.addr = trans.addr - 64*subvec_idx; 
+    sub_vec_trans.pim_values.start_addr = trans.addr;
+    if(subvec_idx==0)
+        sub_vec_trans.pim_values.is_last_subvec = true;
+    else
+        sub_vec_trans.pim_values.is_last_subvec = false;
+
+    // set specific values
+    if(inst_type == "q")
+    {
+        sub_vec_trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+        sub_vec_trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+    }
+    else if(inst_type == "r")
+    {
+        sub_vec_trans.complete_cycle = clk_+ 1*(subvec_idx+1);
+    }
+
+    return sub_vec_trans;
+}
+
+std::vector<Transaction> PIM::IssueRVector(Transaction& trans, uint64_t clk_, bool ca_compression)
+{
+    std::vector<Transaction> return_trans = std::vector<Transaction>();
     if(IsRVector(trans))
     {
-        trans.complete_cycle = clk_+ 1;
+        if(ca_compression)
+        {
+            for(int i=0; i<trans.pim_values.num_rds; i++)
+            {
+                Transaction trans = DecompressPIMInst(trans, clk_, "r", i);
+                return_trans.push_back(trans);
+            }
+        }
+        else
+        {
+            trans.complete_cycle = clk_+ 1;
+            return_trans.push_back(trans);
+        }
+    }
+    return return_trans;
+}
+
+bool PIM::TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression)
+{
+    if(!AddressInInstructionQueue(trans))
+    {
+        if(ca_compression)
+        {
+            for(int i=0; i<trans.pim_values.num_rds; i++)
+            {
+                Transaction trans = DecompressPIMInst(trans, clk_, "q", i);
+                instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+            }
+        }
+        else
+        {
+            trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+            trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+            instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+        }
         return true;
     }
     return false;
 }
 
-// bool PIM::InsertPIMInst(Transaction trans, uint64_t clk_)
-// {
-//     if(!IsRVector(trans) && !AddressInInstructionQueue(trans))
-//     {
-//         trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-//         trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
-//         instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-//         return true;
-//     }
-//     return false;
-// }
-
 void PIM::ReadyPIMCommand()
 {
-    // issue from PIM
     for(int i=0; i<batch_size; i++)
     {
         for(auto it = instruction_queue[i].begin(); it != instruction_queue[i].end(); it++)
