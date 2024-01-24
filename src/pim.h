@@ -38,8 +38,8 @@ class PIM {
         // decode functions
         bool CommandIssuable(Transaction trans, uint64_t clk);
         Transaction FetchInstructionToIssue(Transaction trans, uint64_t clk);
-        bool DecodeInstruction(Transaction trans);
-        Command GetCommandToIssue();
+        // bool DecodeInstruction(Transaction trans);
+        // Command GetCommandToIssue();
 
         // pim logics (input)
         bool IsRVector(Transaction trans);
@@ -60,7 +60,7 @@ class PIM {
 
         void ReadyPIMCommand();
         bool TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression);
-        Transaction PIM::DecompressPIMInst(Transaction& trans, uint64_t clk_, std::string inst_type, int subvec_idx);
+        Transaction DecompressPIMInst(Transaction trans, uint64_t clk_, std::string inst_type, int subvec_idx);
         std::vector<Transaction> IssueRVector(Transaction& trans, uint64_t clk_, bool ca_compression);
         Transaction IssueFromPIM();
 

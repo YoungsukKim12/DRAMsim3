@@ -136,7 +136,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void AddTransactionsToMemory(int batch_start_idx, int batch_tag, int& DIMM_vectors_left);
     void ProfileVectorToTransfer(std::unordered_map<int, uint64_t>&, int batch_start_idx, int batch_idx);
     bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
-
+    EmbDataInfo PullVectorInformation(int emb_pool_idx, int target_vec_idx, std::unordered_map<int, uint64_t> pim_transfer_address);
+    void RescheduleTransactions(int batch_start_idx, int batch_id);
     void ReorderHBMTransaction(int emb_pool_idx);
     uint64_t HotEntryReplication(uint64_t target_addr);
     // void AddTransactionsToMemory(int batch_start_index, int& batch_tag, int &HBM_vectors_left, int &DIMM_vectors_left, std::unordered_map<int, uint64_t> vector_transfer_address);

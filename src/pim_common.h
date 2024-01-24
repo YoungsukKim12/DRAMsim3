@@ -4,6 +4,33 @@
 #include <stdint.h>
 #include <vector>
 
+struct EmbDataInfo{
+  EmbDataInfo()
+        : target_addr(0),
+        vec_class('o'),
+        subvec_idx(0),
+        is_transfer_vec(true),
+        is_last_subvec(true),
+        is_r_vec(vec_class == 'r'),
+        start_addr(0) {}
+  EmbDataInfo(uint64_t target_addr, int vec_class, int subvec_idx, bool is_transfer_vec, int num_rds, bool use_r)
+        : target_addr(target_addr),
+        vec_class(vec_class),
+        subvec_idx(subvec_idx),
+        is_transfer_vec(is_transfer_vec),
+        is_last_subvec(subvec_idx == (num_rds-1)),
+        is_r_vec(vec_class == 'r' && use_r),
+        start_addr(target_addr + 64*((num_rds-1) - subvec_idx)) {}
+
+  uint64_t target_addr;
+  char vec_class;
+  int subvec_idx;
+  bool is_transfer_vec;
+  bool is_last_subvec;
+  bool is_r_vec;
+  uint64_t start_addr;
+};
+
 struct NMPValues{
     NMPValues()
           : nmp_cycle_left(0),

@@ -49,6 +49,8 @@ uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co)
     addr += ba << ba_pos;
     addr += ro << ro_pos;
     addr += co << co_pos;
+    addr = addr << shift_bits;
+
     return addr;
 }
 
