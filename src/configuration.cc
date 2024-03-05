@@ -266,7 +266,7 @@ void Config::InitSystemParams() {
     skewed_cycle = GetInteger("pim_system", "skewed_cycle", 64);
     decode_cycle = GetInteger("pim_system", "decode_cycle", 2);
     pim_cycle = GetInteger("pim_system", "pim_cycle", 2);
-    batch_size = GetInteger("pim_system", "batch_size", 2);
+    batch_size = GetInteger("pim_system", "batch_size", 1);
     // std::cout << "skewed cycle : "<< skewed_cycle << std::endl;
     return;
 }

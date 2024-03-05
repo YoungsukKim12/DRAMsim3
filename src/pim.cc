@@ -56,7 +56,8 @@ bool NMP::RunNMPLogic(int complete_transactions)
 
 
 PIM::PIM(const Config &config)
-    : config_(config)
+    : config_(config),
+    RankCache(128, 64, 4)
 {
     batch_size = config_.batch_size;
     pim_cycle = config_.pim_cycle;
@@ -175,7 +176,6 @@ bool PIM::RunALULogic(Transaction done_inst)
 
 Transaction PIM::DecompressPIMInst(Transaction trans, uint64_t clk_, std::string inst_type, int subvec_idx)
 {
-    // set common values
     Transaction sub_vec_trans = trans;
     sub_vec_trans.addr = trans.addr - 64*subvec_idx; 
     sub_vec_trans.pim_values.start_addr = trans.addr;
@@ -191,8 +191,8 @@ Transaction PIM::DecompressPIMInst(Transaction trans, uint64_t clk_, std::string
     // set specific values
     if(inst_type == "q")
     {
-        sub_vec_trans.pim_values.skewed_cycle = clk_;// + config_.skewed_cycle;
-        sub_vec_trans.pim_values.decode_cycle = clk_;// + config_.decode_cycle;
+        sub_vec_trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+        sub_vec_trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
     }
     else if(inst_type == "r")
     {
@@ -207,28 +207,28 @@ std::vector<Transaction> PIM::IssueRVector(Transaction& trans, uint64_t clk_, bo
     std::vector<Transaction> return_trans = std::vector<Transaction>();
     if(IsRVector(trans))
     {
-        if(ca_compression)
-        {
+        // if(ca_compression)
+        // {
             for(int i=0; i<trans.pim_values.num_rds; i++)
             {
                 Transaction sub_trans = DecompressPIMInst(trans, clk_, "r", i);
                 return_trans.push_back(sub_trans);
             }
-        }
-        else
-        {
-            trans.complete_cycle = clk_+ 1;
-            return_trans.push_back(trans);
-            // std::cout << trans << std::endl;
-        }
+        // }
+        // else
+        // {
+        //     trans.complete_cycle = clk_+ 1;
+        //     return_trans.push_back(trans);
+        //     // std::cout << trans << std::endl;
+        // }
     }
     return return_trans;
 }
 
 bool PIM::TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression)
 {
-    if(ca_compression)
-    {
+    // if(ca_compression)
+    // {
         for(int i=0; i<trans.pim_values.num_rds; i++)
         {
             Transaction sub_trans = DecompressPIMInst(trans, clk_, "q", i);
@@ -236,18 +236,19 @@ bool PIM::TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression
                 instruction_queue[trans.pim_values.batch_tag].push_back(sub_trans);
         }
         return true;
-    }
-    else
-    {
-        if(!AddressInInstructionQueue(trans))
-        {
-            trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-            trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
-            instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-            return true;
-        }
-        return false;
-    }
+    // }
+    // else
+    // {
+    //     if(!AddressInInstructionQueue(trans))
+    //     {
+    //         trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+    //         trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+    //         instruction_queue[trans.pim_values.batch_tag].push_back(trans);
+    //         return true;
+    //     }
+    // }
+    // return false;
+
 }
 
 Transaction PIM::IssueFromPIM()
@@ -255,9 +256,16 @@ Transaction PIM::IssueFromPIM()
     if(issue_queue.size() == 0)
         return Transaction();
     Transaction trans = issue_queue.front();
-    issue_queue.erase(issue_queue.begin());
+    // issue_queue.erase(issue_queue.begin());
+
+    // std::cout << issue_queue.size() << std::endl;
 
     return trans;
+}
+
+void PIM::IssueComplete()
+{
+    issue_queue.erase(issue_queue.begin());
 }
 
 void PIM::AddPIMCycle(Transaction trans)
@@ -335,9 +343,7 @@ bool PIM::IsTransferTrans(Transaction trans)
     for (auto it = bg_read_queue.begin(); it != bg_read_queue.end(); it++) 
     {
         if(trans.addr == it->first && trans.pim_values.vector_transfer)
-        {
             return true;            
-        }
     }
     return false;
 }
@@ -363,8 +369,11 @@ bool PIM::AllSubVecReadComplete(Transaction trans)
     {
         if(trans.addr == it->first)
         {   
+            // std::cout << it->second << "  " << trans.pim_values.start_addr << std::endl;
+
             if(it->second == (trans.pim_values.num_rds-1))
                 return true;            
+
         }
     }
     return false;
@@ -404,7 +413,9 @@ void PIM::LastAdditionComplete(Transaction trans)
 
 bool PIM::PIMCycleComplete(Transaction trans)
 {
+    // std::cout << pim_read_queue[trans.pim_values.batch_tag].size() << pim_read_queue[trans.pim_values.batch_tag][0] << std::endl;
     // std::cout << pim_read_queue[trans.pim_values.batch_tag].size() << std::endl;
+
     if(pim_cycle_left[trans.pim_values.batch_tag] == 0 && pim_read_queue[trans.pim_values.batch_tag].size() == 1)
     {
         return true;

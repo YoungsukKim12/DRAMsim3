@@ -4,6 +4,7 @@
 #include <vector>
 #include "common.h"
 #include "pim_common.h"
+#include "cache_.h"
 #include "configuration.h"
 
 namespace dramsim3 {
@@ -63,6 +64,7 @@ class PIM {
         Transaction DecompressPIMInst(Transaction trans, uint64_t clk_, std::string inst_type, int subvec_idx);
         std::vector<Transaction> IssueRVector(Transaction& trans, uint64_t clk_, bool ca_compression);
         Transaction IssueFromPIM();
+        void IssueComplete();
 
     private:
         std::vector<std::vector<Transaction>> instruction_queue;
@@ -78,6 +80,7 @@ class PIM {
         Transaction transferTrans;
         std::vector<Transaction> issue_queue;
         uint64_t clk_;
+        Cache RankCache;
 
 };
 

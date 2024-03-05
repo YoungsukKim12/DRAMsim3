@@ -112,6 +112,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int MemGetChannel(uint64_t address);
     void LoadTrace(string filename);
     void PrintStats() { memory_system_PIM.PrintStats(); }
+    void PrintStats_DIMM() { memory_system_Mem.PrintStats(); }
+
     void ClockTick();
 
     int RunTensorDIMM();

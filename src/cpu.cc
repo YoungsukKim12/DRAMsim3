@@ -1,6 +1,8 @@
 #include "cpu.h"
 #include <sstream>
 #include <string>
+#include <chrono>
+#include <ctime>
 namespace dramsim3 {
 
 void RandomCPU::ClockTick() {
@@ -135,18 +137,18 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     else if (trace_file.find("512") != std::string::npos)
         num_rds = 8;
 
-    num_ca_in_cycle = 3;
+    num_ca_in_cycle = 1;
 
+    auto time_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); 
 
-    LoadTrace(trace_file);
-    std::cout << "total load : " << PIMMem_transaction.size() << std::endl;
-
+    std::cout << "\nsimulation start time : " <<  ctime(&time_now) << std::endl;
     std::cout << "------------ Info ------------" << std::endl;
+    std::cout << "- using NMP : " << is_using_rankNMP << std::endl;
     std::cout << "- using PIM : " << is_using_PIM << std::endl;
     std::cout << "- using LUT : " << is_using_LUT << std::endl;
-    std::cout << "- CA compression : " << CA_compression << std::endl;
-    std::cout << "- batch size : " << batch_size << std::endl;
-    std::cout << "- addr mapping : " << addrmapping << std::endl;
+    std::cout << "- using CA compression : " << CA_compression << std::endl;
+    std::cout << "- using batch size : " << batch_size << std::endl;
+    std::cout << "- using addr mapping : " << addrmapping << std::endl;
 
     int total_cycle = 0;
     for(int i=0; i<channels*bankgroups; i++)
@@ -156,37 +158,50 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     }
 
     if(config_file_HBM.find("TensorDIMM") != std::string::npos)
-    {
         is_using_TensorDIMM = true;
-        total_cycle = RunTensorDIMM();
-    }
     else if(config_file_HBM.find("RecNMP") != std::string::npos)
     {
         is_using_RecNMP = true;
         int killobyte = 1 << 10;
         int cache_size = killobyte * 128; //RecNMP uses 128KB cache
         recNMPCache = Cache(cache_size, 64, 8);
-        total_cycle = RunRecNMP();
     }
     else if (config_file_HBM.find("TRiM") != std::string::npos)
-    {
         is_using_TRiM = true;
-        total_cycle = RunTRiM();        
-    }
     else if (config_file_HBM.find("HEAM") != std::string::npos)
-    {
         is_using_HEAM = true;
-        total_cycle = RunHEAM();
-    }
     else
-    {
         is_using_SPACE = true;
+
+    LoadTrace(trace_file);
+    std::cout << "total load : " << PIMMem_transaction.size() << std::endl;
+
+    if(is_using_TensorDIMM)
+        total_cycle = RunTensorDIMM();
+    else if(is_using_RecNMP)
+        total_cycle = RunRecNMP();
+    else if(is_using_TRiM)
+        total_cycle = RunTRiM();
+    else if(is_using_HEAM)
+        total_cycle = RunHEAM();
+    else
         total_cycle = RunSPACE();
+
+    for(int i=0; i<channels*bankgroups; i++)
+    {
+        std::cout << "loads on bg idx : " << i << " " << loads_per_bg[i] << std::endl;
     }
+
+    for(int i=0; i<channels*bankgroups; i++)
+    {
+        std::cout << "r loads on bg idx : " << i << " " << loads_per_bg[i]-loads_per_bg_for_q[i] << std::endl;
+    }
+
 
     std::cout << "- total cycle : " << total_cycle << std::endl;
     std::cout << "-----------------------------" << std::endl;
     PrintStats();
+    PrintStats_DIMM();
 }
 
 int TraceBasedCPUForHeterogeneousMemory::RunTensorDIMM() {
@@ -226,7 +241,8 @@ int TraceBasedCPUForHeterogeneousMemory::RunRecNMP() {
     NMP Rec_nmp = NMP(add_cycle);
     int batch_start_index = 0;
     int batch_tag = 0;
-    int total_batch = (int)Mem_transaction.size()/batch_size;
+    // int total_batch = (int)Mem_transaction.size()/batch_size;
+    int total_batch = 1700;
     std::vector<int> PIMMem_vectors_left;
     std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
 
@@ -259,7 +275,8 @@ int TraceBasedCPUForHeterogeneousMemory::RunRecNMP() {
             if(transaction_processed)
                 complete_transactions = 0;
         }
-        std::cout << i << " of " << total_batch << " processed" << std::endl;
+        if(i%10==0)
+            std::cout << i << " of " << total_batch << " processed" << std::endl;
     }
     return clk_PIM;
 }
@@ -270,18 +287,21 @@ int TraceBasedCPUForHeterogeneousMemory::RunTRiM() {
     int batch_tag = 0;
     // int total_batch = 1250;
     int total_batch = (int)Mem_transaction.size()/batch_size;
+    // int total_batch = 1700;
+
     std::vector<int> PIMMem_vectors_left;
     std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
+    // std::cout << "issue start, cycle : " << clk_PIM << std::endl;
 
-    for(int i=0; i < 400; i++)
+    for(int i=0; i < total_batch-1; i++)
     {
         batch_start_index = i*batch_size;
         batch_tag = 0;
-        pim_transfer_address.clear();
         PIMMem_vectors_left.clear();
- 
+        pim_transfer_address.clear();
         int total_transfers = UpdateBatchInfo(batch_start_index, PIMMem_vectors_left, pim_transfer_address);
         TRiM_nmp.SetTotalTransfers(total_transfers);
+
         while(TRiM_nmp.CheckNMPDone())
         {
             ClockTick();
@@ -297,7 +317,7 @@ int TraceBasedCPUForHeterogeneousMemory::RunTRiM() {
         // {
         //     std::cout << i << " "<< loads_per_bg[i] << std::endl;
         // }
-        // if (i%100 == 0)
+        if (i%100 == 0)
             std::cout << i << " of " << total_batch << " processed" << std::endl;
     }
     return clk_PIM;
@@ -307,12 +327,16 @@ int TraceBasedCPUForHeterogeneousMemory::RunSPACE() {
     NMP SPACE_nmp = NMP(add_cycle);
     int batch_start_index = 0;
     int batch_tag = 0;
-    int total_batch = (int)Mem_transaction.size()/batch_size;
+    // int total_batch = (int)Mem_transaction.size()/batch_size/2;
+    int total_batch = 1800/batch_size;
+    // int total_batch = 400/batch_size;
+
+
     std::vector<int> PIMMem_vectors_left;
     std::vector<int> Mem_vectors_left;
     std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
 
-    for(int i=0; i < 400; i++)
+    for(int i=0; i < total_batch-1; i++)
     {
         batch_start_index = i*batch_size;
         batch_tag = 0;
@@ -345,12 +369,15 @@ int TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
     NMP HEAM_nmp = NMP(add_cycle);
     int batch_start_index = 0;
     int batch_tag = 0;
-    int total_batch = 5000;
+    // int total_batch = (int)Mem_transaction.size()/batch_size/2;
+    int total_batch = 1800/batch_size;
+    // int total_batch = 400/batch_size;
+
     std::vector<int> PIMMem_vectors_left;
     std::vector<int> Mem_vectors_left;
     std::vector<std::unordered_map<int, uint64_t>> pim_transfer_address;
 
-    for(int i=0; i < 400; i++)
+    for(int i=0; i < total_batch-1; i++)
     {
         batch_start_index = i*batch_size;
         batch_tag = 0;
@@ -359,6 +386,9 @@ int TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
         pim_transfer_address.clear();
         int total_transfers = UpdateBatchInfoForHetero(batch_start_index, PIMMem_vectors_left, Mem_vectors_left, pim_transfer_address);
         HEAM_nmp.SetTotalTransfers(total_transfers);
+        // std::cout << "issue start, cycle : " << clk_PIM << std::endl;
+
+
         while(HEAM_nmp.CheckNMPDone())
         {
             ClockTick();
@@ -371,7 +401,7 @@ int TraceBasedCPUForHeterogeneousMemory::RunHEAM() {
             // if(HEAM_nmp.GetPendingTransfers() != 0)
             //     std::cout << HEAM_nmp.GetPendingTransfers() << std::endl;
         }
-        // if(i%100 == 0)
+        if(i%100 == 0)
             std::cout << i << " of " << total_batch << " processed" << std::endl;
     }
     return clk_PIM;
@@ -388,7 +418,6 @@ int TraceBasedCPUForHeterogeneousMemory::UpdateBatchInfoForHetero(int batch_star
         int PIMMem_vectors = PIMMem_transaction[emb_pool_idx].size();
         int Mem_vectors = Mem_transaction[emb_pool_idx].size();
         PIMMem_vectors_left.push_back(PIMMem_vectors);
-        Mem_vectors = 0; // ?????
         Mem_vectors_left.push_back(Mem_vectors);
 
         std::unordered_map<int, uint64_t> transfer_vectors_per_batch;
@@ -475,7 +504,6 @@ int TraceBasedCPUForHeterogeneousMemory::UpdateBatchInfo(int batch_start_idx, st
 }
 
 void TraceBasedCPUForHeterogeneousMemory::RescheduleTransactions(int batch_start_idx, int batch_idx) {
-    // Step 1: Store embeddings with different bankgroup idx in separate vectors
     std::unordered_map<int, std::vector<std::tuple<uint64_t, char, int>>> bg_transactions;
     int emb_pool_idx = batch_start_idx + batch_idx;
 
@@ -510,24 +538,19 @@ void TraceBasedCPUForHeterogeneousMemory::ProfileVectorToTransfer(std::unordered
         uint64_t addr = std::get<0>(PIMMem_transaction[emb_pool_idx][i]);
 
 
+
         if(is_using_TRiM)
         {
-            char vec_class = std::get<1>(PIMMem_transaction[emb_pool_idx][i]);
-            int subvec_idx = std::get<2>(PIMMem_transaction[emb_pool_idx][i]);
+            // char vec_class = std::get<1>(PIMMem_transaction[emb_pool_idx][i]);
+            // int subvec_idx = std::get<2>(PIMMem_transaction[emb_pool_idx][i]);
 
             // if(vec_class == 'h')
             // {
-            //     // std::cout << "1!" << addr << std::endl;
-
             //     addr = HotEntryReplication(addr);
-
             //     PIMMem_transaction[emb_pool_idx][i] = std::make_tuple(addr, vec_class, subvec_idx);
-            //     // std::cout  << "2!" << std::get<0>(PIMMem_transaction[emb_pool_idx][i]) << std::endl;
             // }
-            // std::cout << emb_pool_idx << " " << addr << std::endl;            
-            int bg_idx = PIMMemGetChannel(addr)*bankgroups + PIMMemGetBankGroup(addr);
-            loads_per_bg[bg_idx] += 1;
         }
+        int bg_idx = PIMMemGetChannel(addr)*bankgroups + PIMMemGetBankGroup(addr);
 
         int index;
 
@@ -537,9 +560,14 @@ void TraceBasedCPUForHeterogeneousMemory::ProfileVectorToTransfer(std::unordered
             index = PIMMemGetChannel(addr) * bankgroups + PIMMemGetBankGroup(addr);
         }
 
+        loads_per_bg[bg_idx] += 1;
         if(is_using_LUT) {
             if(std::get<1>(PIMMem_transaction[emb_pool_idx][i]) != 'r') // check only q vectors
+            {
                 transfer_vectors[index] = addr; // Storing the last address for each rank or bank group
+                loads_per_bg_for_q[bg_idx] += 1;
+            }
+
         } else {
             transfer_vectors[index] = addr;
         }
@@ -554,7 +582,7 @@ void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactionsToHetero(int batch
         return;
 
     AddTransactionsToPIMMem(batch_index, batch_tag, PIMMem_vectors_left[batch_tag], pim_transfer_address[batch_tag]);
-    // AddTransactionsToMemory(batch_index, batch_tag, Mem_vectors_left[batch_tag]);
+    AddTransactionsToMemory(batch_index, batch_tag, Mem_vectors_left[batch_tag]);
     if((PIMMem_vectors_left[batch_tag] == 0) && (Mem_vectors_left[batch_tag]==0))
         batch_tag++;
 }
@@ -615,17 +643,17 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
         if (PIM_mem_get_next_) {
             if(is_using_RecNMP)
             {
-                if(emb_data.vec_class == 'h')
-                {
-                    bool hit = recNMPCache.access(emb_data.target_addr);
-                    if(hit)
-                    {
-                        PIM_vectors_left--;
-                        if(emb_data.is_transfer_vec)
-                            cache_hit_on_transfer_vec++;
-                        return;
-                    }
-                }
+                // if(emb_data.vec_class == 'h')
+                // {
+                //     bool hit = recNMPCache.access(emb_data.target_addr);
+                //     if(hit)
+                //     {
+                //         PIM_vectors_left--;
+                //         if(emb_data.is_transfer_vec)
+                //             cache_hit_on_transfer_vec++;
+                //         return;
+                //     }
+                // }
             }
             if(emb_data.is_transfer_vec)
                 PIMMem_address_in_processing.push_back(emb_data.target_addr);                
@@ -644,6 +672,15 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
         for(int i=0; i<PIMMem_config->channels; i++)
         {
             trans_per_channel.push_back(0);
+        }
+
+        if(!CA_compression)
+        {
+            // to consider multiple issues across various channels, set cycles for delivering pim instruction as 3, not 7(original).
+            for(int i=0; i<6; i++)
+            {
+                ClockTick();
+            }
         }
 
         while(true)
@@ -671,6 +708,7 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
 
             if(insert_to_all_channel)
                 break;
+
 
             if (PIM_mem_get_next_) {
                 PimValues pim_values(0, emb_data.is_transfer_vec, emb_data.is_r_vec, false, batch_tag, num_rds, emb_data.is_last_subvec, emb_data.start_addr);
@@ -731,7 +769,6 @@ void TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(int batch_idx,
 
         // if(insert_to_all_channel)
         //     break;
-
         if (Mem_get_next_) {
             PimValues pim_values;
             memory_system_Mem.AddTransaction(target_addr, false, pim_values);
@@ -838,8 +875,10 @@ void TraceBasedCPUForHeterogeneousMemory::ReorderHBMTransaction(int emb_pool_idx
 
 void TraceBasedCPUForHeterogeneousMemory::ClockTick(){
     memory_system_PIM.ClockTick();
-    // calculated considering clock frequency difference
-    if(clk_PIM %4 == 0)
+    // memory_system_Mem.ClockTick();
+    // clk_Mem++;
+    // // calculated considering clock frequency difference
+    if(clk_PIM % 2 == 0)
     {
         memory_system_Mem.ClockTick();
         memory_system_Mem.ClockTick();
@@ -937,20 +976,21 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
                 str_count++;
             }
 
-            if(is_using_SPACE || is_using_HEAM)
+            if(is_using_HEAM)
             {
                 if(mode == "HBM")
                 {
-                    if(CA_compression)
+                    // if(CA_compression)
+                    if(is_using_PIM || is_using_rankNMP)
                     {
                         if(subvec_idx == (num_rds-1))
                             PIMMem_transaction[count].push_back(std::make_tuple(addr, vec_class, subvec_idx));
                     }
-                    else
-                        PIMMem_transaction[count].push_back(std::make_tuple(addr, vec_class, subvec_idx));
+                    // else
+                    //     PIMMem_transaction[count].push_back(std::make_tuple(addr, vec_class, subvec_idx));
                 }
-                else
-                    Mem_transaction[count].push_back(std::make_tuple(addr, vec_class, subvec_idx));
+                // else
+                //     Mem_transaction[count].push_back(std::make_tuple(addr, vec_class, subvec_idx));
             }
             else
             {
