@@ -227,27 +227,15 @@ std::vector<Transaction> PIM::IssueRVector(Transaction& trans, uint64_t clk_, bo
 
 bool PIM::TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression)
 {
-    // if(ca_compression)
-    // {
-        for(int i=0; i<trans.pim_values.num_rds; i++)
-        {
-            Transaction sub_trans = DecompressPIMInst(trans, clk_, "q", i);
-            if(!AddressInInstructionQueue(sub_trans))
-                instruction_queue[trans.pim_values.batch_tag].push_back(sub_trans);
-        }
-        return true;
-    // }
-    // else
-    // {
-    //     if(!AddressInInstructionQueue(trans))
-    //     {
-    //         trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
-    //         trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
-    //         instruction_queue[trans.pim_values.batch_tag].push_back(trans);
-    //         return true;
-    //     }
-    // }
-    // return false;
+
+    for(int i=0; i<trans.pim_values.num_rds; i++)
+    {
+        Transaction sub_trans = DecompressPIMInst(trans, clk_, "q", i);
+        if(!AddressInInstructionQueue(sub_trans))
+            instruction_queue[trans.pim_values.batch_tag].push_back(sub_trans);
+    }
+    return true;
+
 
 }
 
@@ -413,8 +401,6 @@ void PIM::LastAdditionComplete(Transaction trans)
 
 bool PIM::PIMCycleComplete(Transaction trans)
 {
-    // std::cout << pim_read_queue[trans.pim_values.batch_tag].size() << pim_read_queue[trans.pim_values.batch_tag][0] << std::endl;
-    // std::cout << pim_read_queue[trans.pim_values.batch_tag].size() << std::endl;
 
     if(pim_cycle_left[trans.pim_values.batch_tag] == 0 && pim_read_queue[trans.pim_values.batch_tag].size() == 1)
     {

@@ -157,7 +157,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int complete_transactions = 0;
     int add_cycle = 3;
 
-    std::vector<std::vector<std::tuple<uint64_t, char, int>>> PIMMem_transaction;
+    std::vector<std::vector<std::tuple<uint64_t, char, int, int, int>>> PIMMem_transaction;
     std::vector<std::vector<std::tuple<uint64_t, char, int>>> Mem_transaction;
     std::list<uint64_t> PIMMem_address_in_processing;
     std::list<uint64_t> Mem_address_in_processing;
@@ -173,6 +173,7 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     bool is_using_PIM;
     bool is_using_LUT;
     bool is_using_HEAM;
+    int collision;
 
     int cache_hit_on_transfer_vec=0;
 

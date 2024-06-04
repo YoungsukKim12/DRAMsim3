@@ -139,8 +139,6 @@ void SimpleStats::PrintFinalStats() {
                           header_descs_[it.first]);
         }
     }
-
-    print_pairs_.clear();
 }
 
 void SimpleStats::Reset() {
@@ -435,6 +433,7 @@ void SimpleStats::UpdateFinalStats() {
     doubles_["ref_energy"] = counters_["num_ref_cmds"] * config_.ref_energy_inc;
     doubles_["refb_energy"] =
         counters_["num_refb_cmds"] * config_.refb_energy_inc;
+
 
     // vector doubles, update first, then push
     double background_energy = 0.0;

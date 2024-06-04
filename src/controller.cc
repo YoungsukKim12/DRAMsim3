@@ -75,13 +75,9 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
             {
                 Command cmd = TransToCommand(*it);                
                 PIM& pim_ = config_.NMP_enabled ? pims_[cmd.Rank()] : pims_[cmd.Bankgroup()];
-                // std::cout << cmd.Rank() << std::endl;
-                // std::cout << cmd.Bankgroup() << std::endl;
-                // std::cout << it->pim_values.start_addr << " " << it->addr << std::endl;
                 bool process_complete = pim_.RunALULogic(*it);
                 if(process_complete)
                 {
-                    // std::cout << it->addr << std::endl;
                     uint64_t addr = it->addr;
                     it = return_queue_.erase(it);
                     auto pair = pim_.PullTransferTrans();
@@ -291,20 +287,8 @@ bool Controller::AddTransaction(Transaction trans) {
             {
 
             }
-            // else if(config_.NMP_enabled)
-            // {
-            //     if(!config_.CA_compression)
-            //         pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-            // }
             else
                 pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-            // if(config_.PIM_enabled || config_.NMP_enabled)
-            // {
-            //     // if(!config_.CA_compression)
-            //     //     pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-            // }
-            // else
-            //     pending_rd_q_.insert(std::make_pair(trans.addr, trans));
 
         // if (pending_rd_q_.count(trans.addr) == 1) {
             if (is_unified_queue_) {

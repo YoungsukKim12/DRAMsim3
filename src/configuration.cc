@@ -422,7 +422,6 @@ void Config::SetAddressMapping() {
     // std::cout << "ch : " << ch_pos << " ra : " << ra_pos << " bg : " << bg_pos << " ba : " << ba_pos << " ro : " << ro_pos << " co : " << co_pos << std::endl;
     // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << " shift bits : " << shift_bits << " req size bytes : " << request_size_bytes << std::endl;
 
-
     ch_mask = (1 << field_widths.at("ch")) - 1;
     ra_mask = (1 << field_widths.at("ra")) - 1;
     bg_mask = (1 << field_widths.at("bg")) - 1;
