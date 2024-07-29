@@ -9,27 +9,31 @@ namespace dramsim3 {
 
 struct Address {
     Address()
-        : channel(-1), rank(-1), bankgroup(-1), bank(-1), row(-1), column(-1) {}
-    Address(int channel, int rank, int bankgroup, int bank, int row, int column)
+        : channel(-1), rank(-1), bankgroup(-1), bank(-1), row(-1), column(-1), bot_col(-1) {}
+    Address(int channel, int rank, int bankgroup, int bank, int row, int column, int bot_col)
         : channel(channel),
           rank(rank),
           bankgroup(bankgroup),
           bank(bank),
           row(row),
-          column(column) {}
+          column(column),
+          bot_col(bot_col) {}
     Address(const Address& addr)
         : channel(addr.channel),
           rank(addr.rank),
           bankgroup(addr.bankgroup),
           bank(addr.bank),
           row(addr.row),
-          column(addr.column) {}
+          column(addr.column),
+          bot_col(addr.bot_col) {}
+
     int channel;
     int rank;
     int bankgroup;
     int bank;
     int row;
     int column;
+    int bot_col;
 };
 
 inline uint32_t ModuloWidth(uint64_t addr, uint32_t bit_width, uint32_t pos) {
@@ -80,6 +84,7 @@ struct Command {
         return cmd_type == CommandType::READ ||
                cmd_type == CommandType ::READ_PRECHARGE;
     }
+
     bool IsWrite() const {
         return cmd_type == CommandType ::WRITE ||
                cmd_type == CommandType ::WRITE_PRECHARGE;

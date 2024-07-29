@@ -11,6 +11,7 @@
 #include "refresh.h"
 #include "simple_stats.h"
 #include "pim.h"
+#include "configuration.h"
 
 #ifdef THERMAL
 #include "thermal.h"
@@ -37,7 +38,8 @@ class Controller {
     void PrintFinalStats();
     void ResetStats() { simple_stats_.Reset(); }
     std::pair<uint64_t, int> ReturnDoneTrans(uint64_t clock);
-
+    std::pair<uint64_t, bool> GetBarrier();
+    void UpdateBarrier();
     int channel_id_;
 
    private:
@@ -48,7 +50,8 @@ class Controller {
     CommandQueue cmd_queue_;
     std::vector<PIM> pims_;
     Refresh refresh_;
-    int counter; // for debug
+    int last_cmd_end_clk;
+    bool pim_barrier;
 
 #ifdef THERMAL
     ThermalCalculator &thermal_calc_;
@@ -59,6 +62,7 @@ class Controller {
     std::vector<Transaction> unified_queue_;
     std::vector<Transaction> read_queue_;
     std::vector<Transaction> write_buffer_;
+    std::vector<Transaction> pim_queue_;
 
     // transactions that are not completed, use map for convenience
     std::multimap<uint64_t, Transaction> pending_rd_q_;
@@ -66,6 +70,8 @@ class Controller {
 
     // completed transactions
     std::vector<Transaction> return_queue_;
+    // completed prefetch / transfer transactions
+    std::vector<Transaction> pftr_queue_;
 
     // row buffer policy
     RowBufPolicy row_buf_policy_;

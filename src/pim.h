@@ -9,24 +9,6 @@
 
 namespace dramsim3 {
 
-class NMP {
-    public:
-        NMP(int add_cycle):
-            add_cycle_(add_cycle) {}
-        // nmp logics
-        void ClockTick() {clk_ = clk_ + 1;};
-        int GetPendingTransfers();
-        void SetTotalTransfers(int transfers);
-        bool CheckNMPDone();
-        bool RunNMPLogic(int complete_transactions);
-
-    private:
-        int clk_;
-        NMPValues nmp_values;
-        int add_cycle_;
-
-};
-
 class PIM {
     public:
         PIM(const Config &config);
@@ -39,8 +21,6 @@ class PIM {
         // decode functions
         bool CommandIssuable(Transaction trans, uint64_t clk);
         Transaction FetchInstructionToIssue(Transaction trans, uint64_t clk);
-        // bool DecodeInstruction(Transaction trans);
-        // Command GetCommandToIssue();
 
         // pim logics (input)
         bool IsRVector(Transaction trans);

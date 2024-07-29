@@ -38,10 +38,11 @@ Address Config::AddressMapping(uint64_t hex_addr) const {
     int ba = (hex_addr >> ba_pos) & ba_mask;
     int ro = (hex_addr >> ro_pos) & ro_mask;
     int co = (hex_addr >> co_pos) & co_mask;
-    return Address(channel, rank, bg, ba, ro, co);
+    int bc = (hex_addr >> bc_pos) & bc_mask;
+    return Address(channel, rank, bg, ba, ro, co, bc);
 }
 
-uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co) const {
+uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co, int bc) const {
     uint64_t addr = 0;
     addr += ch << ch_pos;
     addr += ra << ra_pos;
@@ -49,6 +50,7 @@ uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co)
     addr += ba << ba_pos;
     addr += ro << ro_pos;
     addr += co << co_pos;
+    addr += bc << bc_pos;
     addr = addr << shift_bits;
 
     return addr;
@@ -258,15 +260,15 @@ void Config::InitSystemParams() {
         reader.GetBoolean("system", "aggressive_precharging_enabled", false);
 
     // PIM parameters
-    NMP_enabled = reader.GetBoolean("pim_system", "NMP_enabled", false);
     PIM_enabled = reader.GetBoolean("pim_system", "PIM_enabled", false);
-    LUT_enabled = reader.GetBoolean("pim_system", "LUT_enabled", false);
+    PIM_level = reader.Get("pim_system", "PIM_level", "channel");
+    SRAM_enabled = reader.GetBoolean("pim_system", "SRAM_enabled", false);
     CA_compression = reader.GetBoolean("pim_system", "CA_compression", false);
+    bot_col_bits = GetInteger("system", "bot_col_bits", 0);
 
     skewed_cycle = GetInteger("pim_system", "skewed_cycle", 64);
     decode_cycle = GetInteger("pim_system", "decode_cycle", 2);
     pim_cycle = GetInteger("pim_system", "pim_cycle", 2);
-    batch_size = GetInteger("pim_system", "batch_size", 1);
     // std::cout << "skewed cycle : "<< skewed_cycle << std::endl;
     return;
 }
@@ -383,10 +385,11 @@ void Config::SetAddressMapping() {
     field_widths["bg"] = LogBase2(bankgroups);
     field_widths["ba"] = LogBase2(banks_per_group);
     field_widths["ro"] = LogBase2(rows);
-    field_widths["co"] = actual_col_bits;
+    field_widths["bc"] = bot_col_bits;
+    field_widths["co"] = actual_col_bits - bot_col_bits;
 
-    if (address_mapping.size() != 12) {
-        std::cerr << "Unknown address mapping (6 fields each 2 chars required)"
+    if (address_mapping.size() != 12 || address_mapping.size() != 14) {
+        std::cerr << "Unknown address mapping (6/7 fields each 2 chars required)"
                   << std::endl;
         AbruptExit(__FILE__, __LINE__);
     }
@@ -418,6 +421,7 @@ void Config::SetAddressMapping() {
     ba_pos = field_pos.at("ba");
     ro_pos = field_pos.at("ro");
     co_pos = field_pos.at("co");
+    bc_pos = field_pos.at("bc");
 
     // std::cout << "ch : " << ch_pos << " ra : " << ra_pos << " bg : " << bg_pos << " ba : " << ba_pos << " ro : " << ro_pos << " co : " << co_pos << std::endl;
     // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << " shift bits : " << shift_bits << " req size bytes : " << request_size_bytes << std::endl;
@@ -428,6 +432,7 @@ void Config::SetAddressMapping() {
     ba_mask = (1 << field_widths.at("ba")) - 1;
     ro_mask = (1 << field_widths.at("ro")) - 1;
     co_mask = (1 << field_widths.at("co")) - 1;
+    bc_mask = (1 << field_widths.at("bc")) - 1;
 }
 
 }  // namespace dramsim3

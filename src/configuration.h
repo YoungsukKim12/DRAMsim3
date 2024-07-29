@@ -35,7 +35,7 @@ class Config {
    public:
     Config(std::string config_file, std::string out_dir);
     Address AddressMapping(uint64_t hex_addr) const;
-    uint64_t GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co) const;
+    uint64_t GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co, int bc) const;
     // DRAM physical structure
     DRAMProtocol protocol;
     int channel_size;
@@ -55,6 +55,11 @@ class Config {
     int shift_bits;
     int ch_pos, ra_pos, bg_pos, ba_pos, ro_pos, co_pos;
     uint64_t ch_mask, ra_mask, bg_mask, ba_mask, ro_mask, co_mask;
+
+    //PIM params for vp
+    int bot_col_bits;
+    int bc_pos;
+    int bc_mask;
 
     // Generic DRAM timing parameters
     double tCK;
@@ -136,9 +141,9 @@ class Config {
     bool enable_hbm_dual_cmd;
 
     // NMP, PIM parameters
-    bool NMP_enabled;
     bool PIM_enabled;
-    bool LUT_enabled;
+    std::string PIM_level;
+    bool SRAM_enabled;
     bool CA_compression;
     uint64_t skewed_cycle;
     int batch_size;

@@ -44,7 +44,7 @@ bool ChannelState::IsRWPendingOnRef(const Command& cmd) const {
 void ChannelState::BankNeedRefresh(int rank, int bankgroup, int bank,
                                    bool need) {
     if (need) {
-        Address addr = Address(-1, rank, bankgroup, bank, -1, -1);
+        Address addr = Address(-1, rank, bankgroup, bank, -1, -1, -1);
         refresh_q_.emplace_back(CommandType::REFRESH_BANK, addr, -1);
     } else {
         for (auto it = refresh_q_.begin(); it != refresh_q_.end(); it++) {
@@ -60,7 +60,7 @@ void ChannelState::BankNeedRefresh(int rank, int bankgroup, int bank,
 
 void ChannelState::RankNeedRefresh(int rank, bool need) {
     if (need) {
-        Address addr = Address(-1, rank, -1, -1, -1, -1);
+        Address addr = Address(-1, rank, -1, -1, -1, -1, -1);
         refresh_q_.emplace_back(CommandType::REFRESH, addr, -1);
     } else {
         for (auto it = refresh_q_.begin(); it != refresh_q_.end(); it++) {
@@ -85,7 +85,7 @@ Command ChannelState::GetReadyCommand(const Command& cmd, uint64_t clk) const {
                     continue;
                 }
                 if (ready_cmd.cmd_type != cmd.cmd_type) {  // likely PRECHARGE
-                    Address new_addr = Address(-1, cmd.Rank(), j, k, -1, -1);
+                    Address new_addr = Address(-1, cmd.Rank(), j, k, -1, -1, -1);
                     ready_cmd.addr = new_addr;
                     return ready_cmd;
                 } else {
@@ -160,7 +160,7 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                     .other_banks_same_bankgroup[static_cast<int>(cmd.cmd_type)],
                 clk);
 
-            if(!config_.PIM_enabled)
+            if(!config_.PIM_enabled || (config_.PIM_enabled && config_.PIM_level == "rank"))
             {
                 // Other bankgroups
                 UpdateOtherBankgroupsSameRankTiming(
@@ -169,7 +169,7 @@ void ChannelState::UpdateTiming(const Command& cmd, uint64_t clk) {
                         .other_bankgroups_same_rank[static_cast<int>(cmd.cmd_type)],
                     clk);
 
-                if(!config_.NMP_enabled)
+                if(!config_.PIM_enabled)
                 {
                     // Other ranks
                     UpdateOtherRanksTiming(
