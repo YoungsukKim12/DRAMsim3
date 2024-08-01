@@ -17,7 +17,6 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
       simple_stats_(config_, channel_id_),
       channel_state_(config, timing),
       cmd_queue_(channel_id_, config, channel_state_, simple_stats_),
-      pims_(),
       refresh_(config, channel_state_),
 #ifdef THERMAL
       thermal_calc_(thermal_calc),
@@ -39,20 +38,6 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
     {
         pim_queue_.reserve(config_.trans_queue_size);
         pftr_queue_.reserve(config_.trans_queue_size);
-        if(config_.PIM_level == "bankgroup")
-        {
-            pims_.reserve(config_.bankgroups);
-            for(int i=0; i < config_.bankgroups; i++){
-                pims_.push_back(PIM(config));
-            }
-        }
-        else if (config_.PIM_level == "rank")
-        {
-            pims_.reserve(config_.ranks);
-            for(int i=0; i < config_.ranks; i++){
-                pims_.push_back(PIM(config));
-            }            
-        }
     }
 }
 
@@ -64,7 +49,7 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
     cmd_trace_.open(trace_file_name, std::ofstream::out);
 #endif  // CMD_TRACE
 
-}
+
 
 std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
     auto it = return_queue_.begin();
@@ -76,18 +61,6 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
                 simple_stats_.Increment("num_reads_done");
                 simple_stats_.AddValue("read_latency", clk_ - it->added_cycle);
             }
-            if(config_.PIM_enabled)
-            {
-                Command cmd = TransToCommand(*it);                
-            }
-            else
-            {
-                auto pair = std::make_pair(it->addr, it->is_write);
-                it = return_queue_.erase(it);
-                return pair;
-            }
-        } else {
-            ++it;
         }
     }
     return std::make_pair(-1, -1);
@@ -97,10 +70,6 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
 void Controller::ClockTick() {
     // update refresh counter
     refresh_.ClockTick();
-    for(size_t i=0; i<pims_.size();i++)
-    {
-        pims_[i].ClockTick();
-    }
 
     bool cmd_issued = false;
     Command cmd;
@@ -111,7 +80,6 @@ void Controller::ClockTick() {
     // cannot find a refresh related command or there's no refresh
     if(config_.PIM_enabled)
     {
-        int a = 0;
         if (!cmd.IsValid()) {
             for(int i=0; i<config_.ranks; i++)
             {
@@ -275,7 +243,7 @@ bool Controller::AddTransaction(Transaction trans) {
             pending_rd_q_.insert(std::make_pair(trans.addr, trans));
 
         if(config_.PIM_enabled) {
-            pim_queue_.push_back(trans)
+            pim_queue_.push_back(trans);
         }
         else {
             if (pending_rd_q_.count(trans.addr) == 1) {
@@ -294,49 +262,61 @@ void Controller::UpdateBarrier(){
 
     for (auto it = pftr_queue_.begin(); it != pftr_queue_.end(); it++) {
         if(it->complete_cycle <= clk_)
-            pftr_queue_.erase(it)l
+            pftr_queue_.erase(it);
     }
+}
+
+Transaction Controller::DecompressPIMInst(Transaction trans, uint64_t clk_, int subvec_idx)
+{
+    Transaction sub_vec_trans = trans;
+    sub_vec_trans.addr = trans.addr - 64*subvec_idx; 
+
+    sub_vec_trans.pim_values.skewed_cycle = clk_ + config_.skewed_cycle;
+    sub_vec_trans.pim_values.decode_cycle = clk_ + config_.decode_cycle;
+
+    return sub_vec_trans;
 }
 
 // Interaction between MC extension and PIM units
 // Command queue is utilized as a part of the PIM queue to meet the compatibility of DRAMSim3
 void Controller::SchedulePIMTransaction(){
 
-    for (auto it = pim_queue.begin(); it != pim_queue.end(); it++) {
-        Address addrmap = config_.AddressMapping(it->addr);
-        PIM& pim_ = (config_.PIM_level == "rank") ? pims_[addrmap.rank] : pims_[addrmap.bankgroup];
-
-        if(it->pim_values->transfer_cmd) {
-            it->complete_cycle = last_cmd_end_clk + config_.tCCD_S;
+    for (auto it = pim_queue_.begin(); it != pim_queue_.end(); it++) {
+        if(it->pim_values.transfer_cmd) {
+            it->complete_cycle = last_cmd_end_clk + std::max(config_.BL, config_.tCCD_S);
             last_cmd_end_clk = it->complete_cycle;
-            pftr_queue_.push_back(it);
+            pftr_queue_.push_back(*it);
         }
 
+        int total_pims = (config_.PIM_level == "rank") ? config_.ranks : config_.bankgroups;
         if(config_.vp_mapping)
         {
-            for(int i=0; i<pims_.size(); i++)
+            for(int i=0; i<total_pims; i++)
             {
-                Transaction bg_trans = *it;
-                Address addr = AddressMapping(trans.addr)
-                bg_trans.addr = GenerateAddress(addr.channel, addr.rank, i, addr.bank, addr.row, addr.column);
-                for(int j=0; j<it->pim_values->vlen; j++)
+                Transaction v_trans = *it;
+                Address addr = config_.AddressMapping(v_trans.addr);
+                if(config_.PIM_level == "rank")
+                    v_trans.addr = config_.GenerateAddress(addr.channel, i, addr.bankgroup, addr.bank, addr.row, addr.column, addr.bot_col);
+                else
+                    v_trans.addr = config_.GenerateAddress(addr.channel, addr.rank, i, addr.bank, addr.row, addr.column, addr.bot_col);
+
+                for(int j=0; j<it->pim_values.vlen; j++)
                 {
-                    Transaction trans = pim_.DecompressPIMInst(it, clk_, j)
-                    auto cmd = TransToCommand(trans);
+                    Transaction sub_trans = DecompressPIMInst(v_trans, clk_, j);
+                    auto cmd = TransToCommand(sub_trans);
                     if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(), cmd.Bank())) {
                         cmd_queue_.AddCommand(cmd);
                         if(config_.PIM_enabled)
-                            pending_rd_q_.insert(std::make_pair(trans.addr, trans));
+                            pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
                     }
                 }
             }
         }
-        else if(config_.hp_mapping)
+        else
         {
-            for(int i=0; i<it->pim_values->vlen; i++)
+            for(int i=0; i<it->pim_values.vlen; i++)
             {
-                // TODO : put load_trace in cpu.cc and DecompressPIMInst to utils.h
-                Transaction trans = pim_.DecompressPIMInst(it, clk_, i)
+                Transaction trans = DecompressPIMInst(*it, clk_, i);
                 auto cmd = TransToCommand(trans);
                 if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(), cmd.Bank())) {
                     cmd_queue_.AddCommand(cmd);
@@ -348,6 +328,7 @@ void Controller::SchedulePIMTransaction(){
 
         }
 
+    }
 }
 
 void Controller::ScheduleTransaction() {
@@ -407,11 +388,11 @@ void Controller::IssueCommand(const Command &cmd) {
             return_queue_.push_back(it->second);
 
             if(config_.PIM_enabled) {
-                bool pf = it->pim_values->prefetch_cmd;
+                bool pf = it->second.pim_values.prefetch_cmd;
                 if(!pf)
-                    last_cmd_end_clk = it->second.complete_cycle
+                    last_cmd_end_clk = it->second.complete_cycle;
                 else
-                    pftr_queue_.push_back(it);
+                    pftr_queue_.push_back(it->second);
             }
 
             pending_rd_q_.erase(it);

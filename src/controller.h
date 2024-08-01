@@ -11,6 +11,7 @@
 #include "refresh.h"
 #include "simple_stats.h"
 #include "pim.h"
+#include "pim_common.h"
 #include "configuration.h"
 
 #ifdef THERMAL
@@ -48,7 +49,6 @@ class Controller {
     SimpleStats simple_stats_;
     ChannelState channel_state_;
     CommandQueue cmd_queue_;
-    std::vector<PIM> pims_;
     Refresh refresh_;
     int last_cmd_end_clk;
     bool pim_barrier;
@@ -87,6 +87,7 @@ class Controller {
     int write_draining_;
     void ScheduleTransaction();
     void SchedulePIMTransaction();
+    Transaction DecompressPIMInst(Transaction trans, uint64_t clk_, int subvec_idx);
     void IssueCommand(const Command &tmp_cmd);
     Command TransToCommand(const Transaction &trans);
     void UpdateCommandStats(const Command &cmd);

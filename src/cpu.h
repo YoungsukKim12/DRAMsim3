@@ -112,8 +112,6 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     std::vector<std::vector<std::tuple<std::string, uint64_t>>> Mem_transaction;
     std::list<uint64_t> PIMMem_address_in_processing;
     std::list<uint64_t> Mem_address_in_processing;
-    uint64_t PIMMem_complete_addr;
-    uint64_t Mem_complete_addr;
 
     bool CA_compression;
     bool is_using_vp;
@@ -128,7 +126,6 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int cache_hit_on_transfer_vec=0;
     bool show_lb_ratio = true;
 
-    int num_rds;
     int channels;
     int ranks;
     int bankgroups;
@@ -139,7 +136,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     std::vector<int> loads_per_bg_for_q;
     std::vector<float> batch_max_load;
     std::vector<int> batch_total_embeddings;
-
-    Cache recNMPCache;
-
 };
+
+}
+
+#endif

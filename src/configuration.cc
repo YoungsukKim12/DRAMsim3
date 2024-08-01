@@ -265,7 +265,7 @@ void Config::InitSystemParams() {
     SRAM_enabled = reader.GetBoolean("pim_system", "SRAM_enabled", false);
     CA_compression = reader.GetBoolean("pim_system", "CA_compression", false);
     bot_col_bits = GetInteger("system", "bot_col_bits", 0);
-
+    vp_mapping = reader.GetBoolean("pim_system", "vp_mapping", false);
     skewed_cycle = GetInteger("pim_system", "skewed_cycle", 64);
     decode_cycle = GetInteger("pim_system", "decode_cycle", 2);
     pim_cycle = GetInteger("pim_system", "pim_cycle", 2);

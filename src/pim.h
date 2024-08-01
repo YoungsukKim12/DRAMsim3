@@ -41,7 +41,7 @@ class PIM {
 
         void ReadyPIMCommand();
         bool TryInsertPIMInst(Transaction trans, uint64_t clk_, bool ca_compression);
-        Transaction DecompressPIMInst(Transaction trans, uint64_t clk_, std::string inst_type, int subvec_idx);
+        Transaction DecompressPIMInst(Transaction trans, uint64_t clk_, int subvec_idx);
         std::vector<Transaction> IssueRVector(Transaction& trans, uint64_t clk_, bool ca_compression);
         Transaction IssueFromPIM();
         void IssueComplete();

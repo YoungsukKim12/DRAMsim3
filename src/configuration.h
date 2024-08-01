@@ -149,6 +149,7 @@ class Config {
     int batch_size;
     int decode_cycle;
     int pim_cycle;
+    bool vp_mapping;
 
     int epoch_period;
     int output_level;

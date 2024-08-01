@@ -132,13 +132,7 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
             std::bind(&TraceBasedCPUForHeterogeneousMemory::ReadCallBack, this, std::placeholders::_1),
             std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack, this, std::placeholders::_1)),
     clk_PIM(0),
-    clk_Mem(0),
-    PIMMem_complete_addr(-1),
-    Mem_complete_addr(-1),
-    num_rds(1),
-    recNMPCache(128, 64, 4),
-    // recNMPCache((1 << 10) * 128, 64, 4),
-    cache_hit_on_transfer_vec(0)
+    clk_Mem(0)
 {
     PIMMem_config = memory_system_PIM.config_copy;
     Mem_config = memory_system_Mem.config_copy;
@@ -152,16 +146,7 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     is_using_SRAM = PIMMem_config->SRAM_enabled;
     batch_size = PIMMem_config->batch_size;
     addrmapping = PIMMem_config->address_mapping;
-
     CA_compression = PIMMem_config->CA_compression;
-    if (trace_file.find("64") != std::string::npos)
-        num_rds = 1;
-    else if (trace_file.find("128") != std::string::npos)
-        num_rds = 2;
-    else if (trace_file.find("256") != std::string::npos)
-        num_rds = 4;
-    else if (trace_file.find("512") != std::string::npos)
-        num_rds = 8;
 
     auto time_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); 
 
@@ -219,7 +204,6 @@ int TraceBasedCPUForHeterogeneousMemory::RunPIM() {
 
         if(i%100 == 0)
             std::cout << i << " / " << total_batch << std::endl;
-
     }
 
     return clk_PIM;
@@ -241,15 +225,18 @@ void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactions(int batch_idx, in
 
 bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx, int pool_idx)
 {
+    std::string cmd = std::get<0>(PIMMem_transaction[batch_idx][pool_idx]);
     uint64_t addr = std::get<1>(PIMMem_transaction[batch_idx][pool_idx]);
     int vlen = std::get<2>(PIMMem_transaction[batch_idx][pool_idx]);
-    bool prefetch = (vec_class == 'p') ? true : false;
+    bool prefetch = (cmd == "PR") ? true : false;
+    bool transfer = (cmd == "TR") ? true : false;
+    bool readall = (cmd == "RDA") ? true : false;
 
     int curr_channel = PIMMemGetChannel(addr);
     bool PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false);
 
     if (PIM_mem_get_next_) {
-        PimValues pim_values(vlen, prefetch, 0, 0);
+        PimValues pim_values(vlen, prefetch, transfer, readall, 0, 0);
         // PIMMem_address_in_processing.push_back(emb_data.target_addr);
         memory_system_PIM.AddTransaction(addr, false, pim_values);
         return true;
@@ -287,7 +274,6 @@ void TraceBasedCPUForHeterogeneousMemory::ClockTick(){
     clk_PIM++;
 }
 
-
 int TraceBasedCPUForHeterogeneousMemory::PIMMemGetChannel(uint64_t address) {
     Address addr = PIMMem_config->AddressMapping(address);
     return addr.channel;
@@ -305,7 +291,7 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
     std::stringstream ss;
     int count = 0;
 
-    std::vector<std::tuple<std::string, uint64_t, char, int>> HBM_pooling;
+    std::vector<std::tuple<std::string, uint64_t, int>> HBM_pooling;
     std::vector<std::tuple<std::string, uint64_t>> DIMM_pooling;
     PIMMem_transaction.push_back(HBM_pooling);
     Mem_transaction.push_back(DIMM_pooling);
