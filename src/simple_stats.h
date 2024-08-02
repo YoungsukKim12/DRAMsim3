@@ -37,7 +37,7 @@ class SimpleStats {
     void PrintEpochStats();
 
     // Final statas output
-    void PrintFinalStats();
+    void PrintFinalStats(std::string txt_stats_name);
 
     // Reset (usually after one phase of simulation)
     void Reset();

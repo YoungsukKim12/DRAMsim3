@@ -25,10 +25,10 @@ class MemorySystem {
     int GetBusBits() const;
     int GetBurstLength() const;
     int GetQueueSize() const;
-    void PrintStats() const;
+    void PrintStats(std::string tracename) const;
     void ResetStats();
 
-    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const;
+    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write, bool trpf) const;
     bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values);
 
     const Config *config_copy;

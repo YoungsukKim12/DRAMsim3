@@ -35,7 +35,10 @@ class Config {
    public:
     Config(std::string config_file, std::string out_dir);
     Address AddressMapping(uint64_t hex_addr) const;
-    uint64_t GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co, int bc) const;
+    Address AddressMapping_2nd(uint64_t hex_addr) const;
+    uint64_t GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co) const;
+    uint64_t GenerateAddress_2nd(int ch, int ra, int bg, int ba, int ro, int co) const;
+
     // DRAM physical structure
     DRAMProtocol protocol;
     int channel_size;
@@ -51,15 +54,27 @@ class Config {
     int devices_per_rank;
     int BL;
 
+    int channels_2nd;
+    int ranks_2nd;
+    int banks_2nd;
+    int bankgroups_2nd;
+    int banks_per_group_2nd;
+    int rows_2nd;
+    int columns_2nd;
+
     // Address mapping numbers
     int shift_bits;
     int ch_pos, ra_pos, bg_pos, ba_pos, ro_pos, co_pos;
+    int ch_pos_2nd, ra_pos_2nd, bg_pos_2nd, ba_pos_2nd, ro_pos_2nd, co_pos_2nd;
+
     uint64_t ch_mask, ra_mask, bg_mask, ba_mask, ro_mask, co_mask;
 
     //PIM params for vp
     int bot_col_bits;
+    int bot_col_bits_2nd;
     int bc_pos;
-    int bc_mask;
+    // int bc_pos_2nd;
+    // int bc_mask;
 
     // Generic DRAM timing parameters
     double tCK;
@@ -128,6 +143,7 @@ class Config {
 
     // System
     std::string address_mapping;
+    std::string address_mapping_2nd;
     std::string queue_structure;
     std::string row_buf_policy;
     RefreshPolicy refresh_policy;

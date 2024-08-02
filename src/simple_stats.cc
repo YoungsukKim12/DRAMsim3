@@ -75,6 +75,12 @@ SimpleStats::SimpleStats(const Config& config, int channel_id)
              "Average read request latency (cycles)");
     InitStat("average_interarrival", "calculated",
              "Average request interarrival latency (cycles)");
+
+    InitStat("prefetch overhead", "calculated",
+             "Total prefetch overhead (cycles)");
+
+    InitStat("transfer overhead", "calculated",
+             "Total transfer overhead (cycles)");
 }
 
 void SimpleStats::AddValue(const std::string name, const int value) {
@@ -120,7 +126,7 @@ void SimpleStats::PrintEpochStats() {
     print_pairs_.clear();
 }
 
-void SimpleStats::PrintFinalStats() {
+void SimpleStats::PrintFinalStats(std::string txt_stats_name) {
     UpdateFinalStats();
 
     if (config_.output_level >= 0) {
@@ -132,7 +138,7 @@ void SimpleStats::PrintFinalStats() {
     if (config_.output_level >= 1) {
         // HACK: overwrite existing file if this is first channel
         auto perm = channel_id_ == 0 ? std::ofstream::out : std::ofstream::app;
-        std::ofstream txt_out(config_.txt_stats_name, perm);
+        std::ofstream txt_out(txt_stats_name, perm);
         txt_out << GetTextHeader(true);
         for (const auto& it : print_pairs_) {
             PrintStatText(txt_out, it.first, it.second,

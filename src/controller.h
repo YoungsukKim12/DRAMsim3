@@ -31,12 +31,12 @@ class Controller {
     Controller(int channel, const Config &config, const Timing &timing);
 #endif  // THERMAL
     void ClockTick();
-    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const;
+    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write, bool trpf);
     bool AddTransaction(Transaction trans);
     int QueueUsage() const;
     // Stats output
     void PrintEpochStats();
-    void PrintFinalStats();
+    void PrintFinalStats(std::string txt_stats_name);
     void ResetStats() { simple_stats_.Reset(); }
     std::pair<uint64_t, int> ReturnDoneTrans(uint64_t clock);
     std::pair<uint64_t, bool> GetBarrier();
@@ -51,7 +51,14 @@ class Controller {
     CommandQueue cmd_queue_;
     Refresh refresh_;
     int last_cmd_end_clk;
+    int overhead_standard_clk;
     bool pim_barrier;
+
+    uint64_t pref_overhead;
+    uint64_t tr_overhead;
+    uint64_t cumul_pref_overhead;
+    uint64_t cumul_tr_overhead;
+
 
 #ifdef THERMAL
     ThermalCalculator &thermal_calc_;
@@ -71,7 +78,10 @@ class Controller {
     // completed transactions
     std::vector<Transaction> return_queue_;
     // completed prefetch / transfer transactions
-    std::vector<Transaction> pftr_queue_;
+    std::vector<Transaction> pf_queue_;
+    std::vector<Transaction> tr_queue_;
+
+    
 
     // row buffer policy
     RowBufPolicy row_buf_policy_;

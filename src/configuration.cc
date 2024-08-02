@@ -38,11 +38,23 @@ Address Config::AddressMapping(uint64_t hex_addr) const {
     int ba = (hex_addr >> ba_pos) & ba_mask;
     int ro = (hex_addr >> ro_pos) & ro_mask;
     int co = (hex_addr >> co_pos) & co_mask;
-    int bc = (hex_addr >> bc_pos) & bc_mask;
-    return Address(channel, rank, bg, ba, ro, co, bc);
+    // int bc = (hex_addr >> bc_pos) & bc_mask;
+    return Address(channel, rank, bg, ba, ro, co);
 }
 
-uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co, int bc) const {
+Address Config::AddressMapping_2nd(uint64_t hex_addr) const {
+    hex_addr >>= shift_bits;
+    int channel = (hex_addr >> ch_pos_2nd) & ch_mask;
+    int rank = (hex_addr >> ra_pos_2nd) & ra_mask;
+    int bg = (hex_addr >> bg_pos_2nd) & bg_mask;
+    int ba = (hex_addr >> ba_pos_2nd) & ba_mask;
+    int ro = (hex_addr >> ro_pos_2nd) & ro_mask;
+    int co = (hex_addr >> co_pos_2nd) & co_mask;
+    // int bc = (hex_addr >> bc_pos_2nd) & bc_mask;
+    return Address(channel, rank, bg, ba, ro, co);
+}
+
+uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co) const {
     uint64_t addr = 0;
     addr += ch << ch_pos;
     addr += ra << ra_pos;
@@ -50,11 +62,26 @@ uint64_t Config::GenerateAddress(int ch, int ra, int bg, int ba, int ro, int co,
     addr += ba << ba_pos;
     addr += ro << ro_pos;
     addr += co << co_pos;
-    addr += bc << bc_pos;
+    // addr += bc << bc_pos;
     addr = addr << shift_bits;
 
     return addr;
 }
+
+uint64_t Config::GenerateAddress_2nd(int ch, int ra, int bg, int ba, int ro, int co) const {
+    uint64_t addr = 0;
+    addr += ch << ch_pos_2nd;
+    addr += ra << ra_pos_2nd;
+    addr += bg << bg_pos_2nd;
+    addr += ba << ba_pos_2nd;
+    addr += ro << ro_pos_2nd;
+    addr += co << co_pos_2nd;
+    // addr += bc << bc_pos_2nd;
+    addr = addr << shift_bits;
+
+    return addr;
+}
+
 
 void Config::CalculateSize() {
     // calculate rank and re-calculate channel_size
@@ -235,6 +262,7 @@ void Config::InitSystemParams() {
     channels = GetInteger("system", "channels", 1);
     bus_width = GetInteger("system", "bus_width", 64);
     address_mapping = reader.Get("system", "address_mapping", "chrobabgraco");
+    address_mapping_2nd = reader.Get("system", "address_mapping_2nd", "chrobabgraco");
     queue_structure = reader.Get("system", "queue_structure", "PER_BANK");
     row_buf_policy = reader.Get("system", "row_buf_policy", "OPEN_PAGE");
     cmd_queue_size = GetInteger("system", "cmd_queue_size", 16);
@@ -380,27 +408,41 @@ void Config::SetAddressMapping() {
     // std::cout << "total col bits : " << actual_col_bits + col_low_bits << " col low bits : " << col_low_bits << std::endl;
     // has to strictly follow the order of chan, rank, bg, bank, row, col
     std::map<std::string, int> field_widths;
+    std::map<std::string, int> field_widths_2nd;
     field_widths["ch"] = LogBase2(channels);
     field_widths["ra"] = LogBase2(ranks);
     field_widths["bg"] = LogBase2(bankgroups);
     field_widths["ba"] = LogBase2(banks_per_group);
     field_widths["ro"] = LogBase2(rows);
-    field_widths["bc"] = bot_col_bits;
+    // field_widths["bc"] = bot_col_bits;
     field_widths["co"] = actual_col_bits - bot_col_bits;
 
-    if (address_mapping.size() != 12 || address_mapping.size() != 14) {
+
+    if (!(address_mapping.size() == 12 || address_mapping.size() == 14)) {
+        std::cerr << "Unknown address mapping (6/7 fields each 2 chars required)"
+                  << std::endl;
+        AbruptExit(__FILE__, __LINE__);
+    }
+    if (!(address_mapping_2nd.size() == 12 || address_mapping_2nd.size() == 14)) {
         std::cerr << "Unknown address mapping (6/7 fields each 2 chars required)"
                   << std::endl;
         AbruptExit(__FILE__, __LINE__);
     }
 
+
     // // get address mapping position fields from config
     // // each field must be 2 chars
     std::vector<std::string> fields;
+    std::vector<std::string> fields_2nd;
     for (size_t i = 0; i < address_mapping.size(); i += 2) {
         std::string token = address_mapping.substr(i, 2);
         fields.push_back(token);
     }
+    for (size_t i = 0; i < address_mapping_2nd.size(); i += 2) {
+        std::string token = address_mapping_2nd.substr(i, 2);
+        fields_2nd.push_back(token);
+    }
+
 
     std::map<std::string, int> field_pos;
     int pos = 0;
@@ -415,13 +457,36 @@ void Config::SetAddressMapping() {
         pos += field_widths[token];
     }
 
+    std::map<std::string, int> field_pos_2nd;
+    pos = 0;
+    while (!fields_2nd.empty()) {
+        auto token = fields_2nd.back();
+        // std::cout << token << std::endl;
+        fields_2nd.pop_back();
+        if (field_widths.find(token) == field_widths.end()) {
+            std::cerr << "Unrecognized field: " << token << std::endl;
+            AbruptExit(__FILE__, __LINE__);
+        }
+        field_pos_2nd[token] = pos;
+        pos += field_widths[token];
+    }
+
     ch_pos = field_pos.at("ch");
     ra_pos = field_pos.at("ra");
     bg_pos = field_pos.at("bg");
     ba_pos = field_pos.at("ba");
     ro_pos = field_pos.at("ro");
     co_pos = field_pos.at("co");
-    bc_pos = field_pos.at("bc");
+    // bc_pos = field_pos.at("bc");
+
+    ch_pos_2nd = field_pos_2nd.at("ch");
+    ra_pos_2nd = field_pos_2nd.at("ra");
+    bg_pos_2nd = field_pos_2nd.at("bg");
+    ba_pos_2nd = field_pos_2nd.at("ba");
+    ro_pos_2nd = field_pos_2nd.at("ro");
+    co_pos_2nd = field_pos_2nd.at("co");
+    // bc_pos_2nd = field_pos_2nd.at("bc");
+
 
     // std::cout << "ch : " << ch_pos << " ra : " << ra_pos << " bg : " << bg_pos << " ba : " << ba_pos << " ro : " << ro_pos << " co : " << co_pos << std::endl;
     // std::cout << "ch w : " << field_widths["ch"] << " ra w : " << field_widths["ra"] << " bg w : " << field_widths["bg"] << " ba : " << field_widths["ba"] << " ro w : " << field_widths["ro"] << " co w : " << field_widths["co"] << " shift bits : " << shift_bits << " req size bytes : " << request_size_bytes << std::endl;
@@ -432,7 +497,8 @@ void Config::SetAddressMapping() {
     ba_mask = (1 << field_widths.at("ba")) - 1;
     ro_mask = (1 << field_widths.at("ro")) - 1;
     co_mask = (1 << field_widths.at("co")) - 1;
-    bc_mask = (1 << field_widths.at("bc")) - 1;
+    // bc_mask = (1 << field_widths.at("bc")) - 1;
+
 }
 
 }  // namespace dramsim3

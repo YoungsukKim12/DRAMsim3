@@ -328,7 +328,7 @@ inline void HMCMemorySystem::IterateNextLink() {
 }
 
 bool HMCMemorySystem::WillAcceptTransaction(uint64_t hex_addr,
-                                            bool is_write) const {
+                                            bool is_write, bool trpf) const {
     bool insertable = false;
     for (auto link_queue = link_req_queues_.begin();
          link_queue != link_req_queues_.end(); link_queue++) {
@@ -449,7 +449,7 @@ void HMCMemorySystem::DrainRequests() {
             HMCRequest *req = quad_req_queues_[i].front();
             if (req->exit_time <= logic_clk_) {
                 if (ctrls_[req->vault]->WillAcceptTransaction(req->mem_operand,
-                                                              req->is_write)) {
+                                                              req->is_write, false)) {
                     InsertReqToDRAM(req);
                     delete (req);
                     quad_req_queues_[i].erase(quad_req_queues_[i].begin());

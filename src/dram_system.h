@@ -25,11 +25,11 @@ class BaseDRAMSystem {
     void RegisterCallbacks(std::function<void(uint64_t)> read_callback,
                            std::function<void(uint64_t)> write_callback);
     void PrintEpochStats();
-    void PrintStats();
+    void PrintStats(std::string tracename);
     void ResetStats();
 
     virtual bool WillAcceptTransaction(uint64_t hex_addr,
-                                       bool is_write) const = 0;
+                                       bool is_write, bool trpf) const = 0;
     virtual bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) = 0;
     virtual void ClockTick() = 0;
     int GetChannel(uint64_t hex_addr) const;
@@ -64,7 +64,7 @@ class JedecDRAMSystem : public BaseDRAMSystem {
                     std::function<void(uint64_t)> read_callback,
                     std::function<void(uint64_t)> write_callback);
     ~JedecDRAMSystem();
-    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write) const override;
+    bool WillAcceptTransaction(uint64_t hex_addr, bool is_write, bool trpf) const override;
     bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) override;
     void ClockTick() override;
 };
@@ -79,7 +79,7 @@ class IdealDRAMSystem : public BaseDRAMSystem {
                     std::function<void(uint64_t)> write_callback);
     ~IdealDRAMSystem();
     bool WillAcceptTransaction(uint64_t hex_addr,
-                               bool is_write) const override {
+                               bool is_write, bool trpf) const override {
         return true;
     };
     bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) override;

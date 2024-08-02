@@ -25,7 +25,7 @@ class CPU {
     virtual void ClockTick() = 0;
     void ReadCallBack(uint64_t addr) { return; }
     void WriteCallBack(uint64_t addr) { return; }
-    void PrintStats() { memory_system_.PrintStats(); }
+    void PrintStats(std::string tracename) { memory_system_.PrintStats(tracename); }
 
    protected:
     MemorySystem memory_system_;
@@ -84,8 +84,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int PIMMemGetChannel(uint64_t address);
     int MemGetChannel(uint64_t address);
     void LoadTrace(string filename);
-    void PrintStats() { memory_system_PIM.PrintStats(); }
-    void PrintStats_DIMM() { memory_system_Mem.PrintStats(); }
+    void PrintStats(std::string tracename) { memory_system_PIM.PrintStats(tracename); }
+    // void PrintStats_DIMM() { memory_system_Mem.PrintStats(); }
 
     void ClockTick();
     int RunPIM();

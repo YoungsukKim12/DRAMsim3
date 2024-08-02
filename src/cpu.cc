@@ -40,7 +40,7 @@ void RandomCPU::ClockTick() {
         last_addr_ = gen();
         last_write_ = (gen() % 3 == 0);
     }
-    get_next_ = memory_system_.WillAcceptTransaction(last_addr_, last_write_);
+    get_next_ = memory_system_.WillAcceptTransaction(last_addr_, last_write_, false);
     if (get_next_) {
         PimValues pim_values;
         memory_system_.AddTransaction(last_addr_, last_write_, pim_values);
@@ -64,17 +64,17 @@ void StreamCPU::ClockTick() {
     }
     PimValues pim_values;
     if (!inserted_a_ &&
-        memory_system_.WillAcceptTransaction(addr_a_ + offset_, false)) {
+        memory_system_.WillAcceptTransaction(addr_a_ + offset_, false, false)) {
         memory_system_.AddTransaction(addr_a_ + offset_, false, pim_values);
         inserted_a_ = true;
     }
     if (!inserted_b_ &&
-        memory_system_.WillAcceptTransaction(addr_b_ + offset_, false)) {
+        memory_system_.WillAcceptTransaction(addr_b_ + offset_, false, false)) {
         memory_system_.AddTransaction(addr_b_ + offset_, false, pim_values);
         inserted_b_ = true;
     }
     if (!inserted_c_ &&
-        memory_system_.WillAcceptTransaction(addr_c_ + offset_, true)) {
+        memory_system_.WillAcceptTransaction(addr_c_ + offset_, true, false)) {
         memory_system_.AddTransaction(addr_c_ + offset_, true, pim_values);
         inserted_c_ = true;
     }
@@ -109,7 +109,7 @@ void TraceBasedCPU::ClockTick() {
         }
         if (trans_.added_cycle <= clk_) {
             get_next_ = memory_system_.WillAcceptTransaction(trans_.addr,
-                                                             trans_.is_write);
+                                                             trans_.is_write, false);
             if (get_next_) {
                 PimValues pim_values;
                 memory_system_.AddTransaction(trans_.addr, trans_.is_write, pim_values);
@@ -150,13 +150,10 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
 
     auto time_now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now()); 
 
-    // std::cout << "\nsimulation start time : " <<  ctime(&time_now) << std::endl;
-    // std::cout << "------------ Info ------------" << std::endl;
-    // std::cout << "- PIM level : " << is_using_PIM << std::endl;
-    // std::cout << "- SRAM cache : " << is_using_LUT << std::endl;
-    // // std::cout << "- using CA compression : " << CA_compression << std::endl;
-    // std::cout << "- batch size : " << batch_size << std::endl;
-    // std::cout << "- addr mapping : " << addrmapping << std::endl;
+    std::cout << "\nsimulation start time : " <<  ctime(&time_now) << std::endl;
+    std::cout << "------------ Info ------------" << std::endl;
+    std::cout << "- PIM level : " << is_using_PIM << std::endl;
+    std::cout << "- SRAM cache : " << is_using_SRAM << std::endl;
 
     if(config_file_HBM.find("TensorDIMM") != std::string::npos)
         is_using_vp = true;
@@ -176,34 +173,45 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
 
     int total_cycle = 0;
     LoadTrace(trace_file);
-    // std::cout << "Loads : " << PIMMem_transaction.size() << std::endl;
-    std::cout << "-----------------------------" << std::endl;
-
+    std::cout << "------- simulation start --------" << std::endl;
     total_cycle = RunPIM();
-
     std::cout << "- total cycle : " << total_cycle << std::endl;
-    std::cout << "-----------------------------" << std::endl;
-    PrintStats();
-    PrintStats_DIMM();
+
+    std::string trace_name = trace_file;
+    std::string erase_1 = "./traces/kaggle/";
+    std::string erase_2 = ".txt";
+    size_t pos_1 = trace_name.find(erase_1);
+    if(pos_1 != std::string::npos)
+        trace_name.erase(pos_1, erase_1.size());
+
+    size_t pos_2 = trace_name.find(erase_2);
+    if(pos_2 != std::string::npos)
+        trace_name.erase(pos_2, erase_2.size());
+
+    std::cout << trace_name << std::endl;
+    PrintStats(trace_name);
+    // PrintStats_DIMM();
 }
 
 int TraceBasedCPUForHeterogeneousMemory::RunPIM() {
-    int batch_idx = 0;
-    int total_batch = (int)PIMMem_transaction.size();
+    int i = 0;
+    int total_batch = 1000;//(int)PIMMem_transaction.size();
     
-    int pool_idx_pim = 0;
-    int pool_idx_mem = 0;
-    int poolings_pim = PIMMem_transaction[batch_idx].size();
-    int poolings_mem = Mem_transaction[batch_idx].size();
     for(int i=0; i<total_batch-1; i++)
     {
-        ClockTick();
-        AddBatchTransactions(batch_idx, pool_idx_pim, pool_idx_mem);
-        if(pool_idx_pim == poolings_pim && pool_idx_mem == poolings_mem)
-            batch_idx++;
+        int pool_idx_pim = 0;
+        int pool_idx_mem = 0;
+        int poolings_pim = PIMMem_transaction[i].size();
+        int poolings_mem = Mem_transaction[i].size();
 
-        if(i%100 == 0)
+        // if(i%100 == 0)
             std::cout << i << " / " << total_batch << std::endl;
+        while(pool_idx_pim < poolings_pim) // && pool_idx_mem < poolings_mem)
+        {
+            ClockTick();
+            AddBatchTransactions(i, pool_idx_pim, pool_idx_mem);
+        }
+
     }
 
     return clk_PIM;
@@ -215,12 +223,12 @@ void TraceBasedCPUForHeterogeneousMemory::AddBatchTransactions(int batch_idx, in
     if(success)
         pool_idx_PIM++;
 
-    if(is_using_hetero)
-    {
-        bool success = AddTransactionsToMemory(batch_idx, pool_idx_Mem); 
-        if(success)
-            pool_idx_Mem++;
-    }
+    // if(is_using_hetero)
+    // {
+    //     bool success = AddTransactionsToMemory(batch_idx, pool_idx_Mem);
+    //     if(success)
+    //         pool_idx_Mem++;
+    // }
 }
 
 bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx, int pool_idx)
@@ -228,17 +236,46 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
     std::string cmd = std::get<0>(PIMMem_transaction[batch_idx][pool_idx]);
     uint64_t addr = std::get<1>(PIMMem_transaction[batch_idx][pool_idx]);
     int vlen = std::get<2>(PIMMem_transaction[batch_idx][pool_idx]);
-    bool prefetch = (cmd == "PR") ? true : false;
-    bool transfer = (cmd == "TR") ? true : false;
-    bool readall = (cmd == "RDA") ? true : false;
-
+    bool prefetch = cmd.compare("PR") == 0 ? true : false;
+    bool transfer = cmd.compare("TR") == 0 ? true : false;
+    bool readall = cmd.compare("RDD") == 0 ? true : false;
     int curr_channel = PIMMemGetChannel(addr);
-    bool PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false);
+    bool PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false, prefetch || transfer);
+    
+    // if(transfer)
+    //     std::cout << prefetch << " " << transfer << readall << std::endl;
+
+    if(transfer || prefetch)
+    {
+        for(int i=0; i<channels; i++)
+        {
+            Address addrmap = PIMMem_config->AddressMapping(addr);
+            uint64_t ch_addr = PIMMem_config->GenerateAddress(i, addrmap.rank, addrmap.bankgroup, addrmap.bank, addrmap.row, addrmap.column);
+            PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(ch_addr, false, transfer || prefetch);
+            if(!PIM_mem_get_next_)
+                break;
+        }
+    }   
 
     if (PIM_mem_get_next_) {
         PimValues pim_values(vlen, prefetch, transfer, readall, 0, 0);
         // PIMMem_address_in_processing.push_back(emb_data.target_addr);
-        memory_system_PIM.AddTransaction(addr, false, pim_values);
+        if(transfer || prefetch)
+        {
+            // std::cout << "trpf" << std::endl;
+            for(int i=0; i<channels; i++)
+            {
+                Address addrmap = PIMMem_config->AddressMapping(addr);
+                uint64_t ch_addr = PIMMem_config->GenerateAddress(i, addrmap.rank, addrmap.bankgroup, addrmap.bank, addrmap.row, addrmap.column);
+                memory_system_PIM.AddTransaction(ch_addr, false, pim_values);
+            }
+        }
+        else
+        {
+            memory_system_PIM.AddTransaction(addr, false, pim_values);
+            // std::cout << "hi" << std::endl;
+        }
+
         return true;
     }
     return false;
@@ -247,7 +284,7 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
 bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(int batch_idx, int pool_idx)
 {
     uint64_t target_addr = std::get<1>(Mem_transaction[batch_idx][pool_idx]);
-    bool Mem_get_next_ = memory_system_Mem.WillAcceptTransaction(target_addr, false);
+    bool Mem_get_next_ = memory_system_Mem.WillAcceptTransaction(target_addr, false, false);
     int curr_channel = MemGetChannel(target_addr);
 
     if (Mem_get_next_) {
@@ -304,12 +341,18 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
     {
         while (std::getline(file, line, '\n'))
         {
-            std::vector<std::tuple<std::string, uint64_t, int>> HBM_pooling;
-            std::vector<std::tuple<std::string, uint64_t>> DIMM_pooling;
-            PIMMem_transaction.push_back(HBM_pooling);
-            Mem_transaction.push_back(DIMM_pooling);
-            PIMMem_transaction[count].clear();
-            Mem_transaction[count].clear();
+
+            if(line.empty())
+            {
+                count++;
+                std::vector<std::tuple<std::string, uint64_t, int>> HBM_pooling;
+                std::vector<std::tuple<std::string, uint64_t>> DIMM_pooling;
+                PIMMem_transaction.push_back(HBM_pooling);
+                Mem_transaction.push_back(DIMM_pooling);
+                PIMMem_transaction[count].clear();
+                Mem_transaction[count].clear();
+                continue;
+            }
 
             ss.str(line);
             std::string mode = "DIMM";
@@ -333,14 +376,17 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
                     addr = std::stoull(str_tmp);
                 else if(str_count == 3)
                     vlen = std::stoull(str_tmp);
-
                 str_count++;
             }
 
             if(is_using_hetero)
             {
                 if(mode == "HBM")
+                {
                     PIMMem_transaction[count].push_back(std::make_tuple(cmd, addr, vlen));
+                    // if(count==0)
+                    //     std::cout << cmd << " " PIMMem_transaction[count].size() << std::endl;
+                }
                 else
                     Mem_transaction[count].push_back(std::make_tuple(cmd, addr));
             }

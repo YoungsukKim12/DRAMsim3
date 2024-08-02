@@ -39,15 +39,15 @@ void MemorySystem::RegisterCallbacks(
 }
 
 bool MemorySystem::WillAcceptTransaction(uint64_t hex_addr,
-                                         bool is_write) const {
-    return dram_system_->WillAcceptTransaction(hex_addr, is_write);
+                                         bool is_write, bool trpf) const {
+    return dram_system_->WillAcceptTransaction(hex_addr, is_write, trpf);
 }
 
 bool MemorySystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) {
     return dram_system_->AddTransaction(hex_addr, is_write, pim_values);
 }
 
-void MemorySystem::PrintStats() const { dram_system_->PrintStats(); }
+void MemorySystem::PrintStats(std::string tracename) const { dram_system_->PrintStats(tracename); }
 
 void MemorySystem::ResetStats() { dram_system_->ResetStats(); }
 

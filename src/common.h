@@ -9,23 +9,21 @@ namespace dramsim3 {
 
 struct Address {
     Address()
-        : channel(-1), rank(-1), bankgroup(-1), bank(-1), row(-1), column(-1), bot_col(-1) {}
-    Address(int channel, int rank, int bankgroup, int bank, int row, int column, int bot_col)
+        : channel(-1), rank(-1), bankgroup(-1), bank(-1), row(-1), column(-1) {}
+    Address(int channel, int rank, int bankgroup, int bank, int row, int column)
         : channel(channel),
           rank(rank),
           bankgroup(bankgroup),
           bank(bank),
           row(row),
-          column(column),
-          bot_col(bot_col) {}
+          column(column) {}
     Address(const Address& addr)
         : channel(addr.channel),
           rank(addr.rank),
           bankgroup(addr.bankgroup),
           bank(addr.bank),
           row(addr.row),
-          column(addr.column),
-          bot_col(addr.bot_col) {}
+          column(addr.column) {}
 
     int channel;
     int rank;
@@ -33,7 +31,7 @@ struct Address {
     int bank;
     int row;
     int column;
-    int bot_col;
+    // int bot_col;
 };
 
 inline uint32_t ModuloWidth(uint64_t addr, uint32_t bit_width, uint32_t pos) {
@@ -117,16 +115,16 @@ struct PimValues {
         : vlen(0),
           prefetch_cmd(false),
           transfer_cmd(false),
-          read_all_cmd(false),
+          read_dup_cmd(false),
           skewed_cycle(0), 
           decode_cycle(0)
           {} // Default constructor
     
-    PimValues(int vlen, bool prefetchCmd, bool transferCmd, bool readAllCmd, int skewedCycle, int decodeCycle)
+    PimValues(int vlen, bool prefetchCmd, bool transferCmd, bool readDupCmd, int skewedCycle, int decodeCycle)
         : vlen(vlen),
           prefetch_cmd(prefetchCmd),
           transfer_cmd(transferCmd),
-          read_all_cmd(readAllCmd),
+          read_dup_cmd(readDupCmd),
           skewed_cycle(skewedCycle), 
           decode_cycle(decodeCycle)
           {}
@@ -135,7 +133,7 @@ struct PimValues {
         : vlen(pim_values.vlen),
           prefetch_cmd(pim_values.prefetch_cmd),
           transfer_cmd(pim_values.transfer_cmd),
-          read_all_cmd(pim_values.read_all_cmd),
+          read_dup_cmd(pim_values.read_dup_cmd),
           skewed_cycle(pim_values.skewed_cycle), 
           decode_cycle(pim_values.decode_cycle)
           {}
@@ -143,7 +141,7 @@ struct PimValues {
     int vlen;
     bool prefetch_cmd;
     bool transfer_cmd;
-    bool read_all_cmd;
+    bool read_dup_cmd;
     int skewed_cycle;
     int decode_cycle;
 };

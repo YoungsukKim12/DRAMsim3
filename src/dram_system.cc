@@ -50,7 +50,7 @@ void BaseDRAMSystem::PrintEpochStats() {
     return;
 }
 
-void BaseDRAMSystem::PrintStats() {
+void BaseDRAMSystem::PrintStats(std::string tracename) {
     // Finish epoch output, remove last comma and append ]
     std::ofstream epoch_out(config_.json_epoch_name, std::ios_base::in |
                                                          std::ios_base::out |
@@ -59,13 +59,24 @@ void BaseDRAMSystem::PrintStats() {
     epoch_out.write("]", 1);
     epoch_out.close();
 
+
+    // std::remove(config_.json_stats_name.begin(), config_.json_stats_name.end(), ".json");
+
+    std::string txt_filename = config_.json_stats_name;
+    std::string erase = ".json";
+    size_t pos = txt_filename.find(erase);
+    if(pos != std::string::npos)
+        txt_filename.erase(pos, erase.size());
+
+    std::string output_txt_name = txt_filename + "_" + tracename + ".txt";
+    // std::cout << output_json_name << std::endl;
     std::ofstream json_out(config_.json_stats_name, std::ofstream::out);
     json_out << "{";
 
     // close it now so that each channel can handle it
     json_out.close();
     for (size_t i = 0; i < ctrls_.size(); i++) {
-        ctrls_[i]->PrintFinalStats();
+        ctrls_[i]->PrintFinalStats(output_txt_name);
         if (i != ctrls_.size() - 1) {
             std::ofstream chan_out(config_.json_stats_name, std::ofstream::app);
             chan_out << "," << std::endl;
@@ -120,9 +131,9 @@ JedecDRAMSystem::~JedecDRAMSystem() {
 }
 
 bool JedecDRAMSystem::WillAcceptTransaction(uint64_t hex_addr,
-                                            bool is_write) const {
+                                            bool is_write, bool trpf) const {
     int channel = GetChannel(hex_addr);
-    return ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write);
+    return ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write, trpf);
 }
 
 bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values) {
@@ -133,7 +144,7 @@ bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues
 #endif
 
     int channel = GetChannel(hex_addr);
-    bool ok = ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write);
+    bool ok = ctrls_[channel]->WillAcceptTransaction(hex_addr, is_write, pim_values.prefetch_cmd || pim_values.transfer_cmd);
 
     assert(ok);
     if (ok) {
