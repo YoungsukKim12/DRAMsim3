@@ -40,7 +40,7 @@ class Controller {
     void ResetStats() { simple_stats_.Reset(); }
     std::pair<uint64_t, int> ReturnDoneTrans(uint64_t clock);
     std::pair<uint64_t, bool> GetBarrier();
-    void UpdateBarrier();
+    void UpdatePrefetchTransfer();
     int channel_id_;
 
    private:
@@ -54,9 +54,9 @@ class Controller {
     int overhead_standard_clk;
     bool pim_barrier;
 
-    uint64_t pref_overhead;
+    uint64_t pf_overhead;
     uint64_t tr_overhead;
-    uint64_t cumul_pref_overhead;
+    uint64_t cumul_pf_overhead;
     uint64_t cumul_tr_overhead;
 
 

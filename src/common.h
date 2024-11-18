@@ -116,15 +116,17 @@ struct PimValues {
           prefetch_cmd(false),
           transfer_cmd(false),
           read_dup_cmd(false),
+          deliver_cmd(false),
           skewed_cycle(0), 
           decode_cycle(0)
           {} // Default constructor
     
-    PimValues(int vlen, bool prefetchCmd, bool transferCmd, bool readDupCmd, int skewedCycle, int decodeCycle)
+    PimValues(int vlen, bool prefetchCmd, bool transferCmd, bool readDupCmd, bool deliverCmd, int skewedCycle, int decodeCycle)
         : vlen(vlen),
           prefetch_cmd(prefetchCmd),
           transfer_cmd(transferCmd),
           read_dup_cmd(readDupCmd),
+          deliver_cmd(deliverCmd),
           skewed_cycle(skewedCycle), 
           decode_cycle(decodeCycle)
           {}
@@ -134,6 +136,7 @@ struct PimValues {
           prefetch_cmd(pim_values.prefetch_cmd),
           transfer_cmd(pim_values.transfer_cmd),
           read_dup_cmd(pim_values.read_dup_cmd),
+          deliver_cmd(pim_values.deliver_cmd),
           skewed_cycle(pim_values.skewed_cycle), 
           decode_cycle(pim_values.decode_cycle)
           {}
@@ -142,6 +145,7 @@ struct PimValues {
     bool prefetch_cmd;
     bool transfer_cmd;
     bool read_dup_cmd;
+    bool deliver_cmd;
     int skewed_cycle;
     int decode_cycle;
 };

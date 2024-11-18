@@ -18,9 +18,9 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
       channel_state_(config, timing),
       cmd_queue_(channel_id_, config, channel_state_, simple_stats_),
       refresh_(config, channel_state_),
-      pref_overhead(0),
+      pf_overhead(0),
       tr_overhead(0),
-      cumul_pref_overhead(0),
+      cumul_pf_overhead(0),
       cumul_tr_overhead(0),
       last_cmd_end_clk(0),
       overhead_standard_clk(0),
@@ -200,7 +200,7 @@ void Controller::ClockTick() {
     {
         SchedulePIMTransaction();
         if(pim_barrier)
-            UpdateBarrier();
+            UpdatePrefetchTransfer();
     }
     else
         ScheduleTransaction();
@@ -214,42 +214,27 @@ void Controller::ClockTick() {
 bool Controller::WillAcceptTransaction(uint64_t hex_addr, bool is_write, bool trpf)  {
     if(config_.PIM_enabled)
     {
-        bool trpf_processing = (!pf_queue_.empty() || !tr_queue_.empty() || !pim_queue_.empty() || !pending_rd_q_.empty());
-        bool rd_processing = !return_queue_.empty() || !pending_rd_q_.empty();
+        bool trpf_processing = !pf_queue_.empty() || !tr_queue_.empty() || !pim_queue_.empty() || !pending_rd_q_.empty();
+        bool rd_processing = !return_queue_.empty() || !pim_queue_.empty() || !pending_rd_q_.empty();
 
         if(!trpf)
         {
             if(trpf_processing)
-            {
                 return false;            
-            }
             else
             {
                 if(pim_barrier)
-                {
                     pim_barrier = false;
-                    cumul_pref_overhead = cumul_pref_overhead + pref_overhead;
-                    cumul_tr_overhead = cumul_tr_overhead + tr_overhead;
-                    overhead_standard_clk = 0;
-                    last_cmd_end_clk = 0;
-                    pref_overhead = 0;
-                    tr_overhead = 0;
-                }
                 return true;                
             }
         }
         else
         {
             if(rd_processing)
-            {
-                pim_barrier = true;
-                overhead_standard_clk = last_cmd_end_clk;
                 return false;
-            }
             else
             {
-                if(!pim_barrier) //when no single read has been issued in this channel
-                    pim_barrier=true; 
+                pim_barrier=true; 
                 return true;
             }
         }
@@ -293,6 +278,7 @@ bool Controller::AddTransaction(Transaction trans) {
             pending_rd_q_.insert(std::make_pair(trans.addr, trans));
 
         if(config_.PIM_enabled) {
+            trans.pim_values.skewed_cycle = clk_ + trans.pim_values.skewed_cycle;
             pim_queue_.push_back(trans);
         }
         else {
@@ -308,7 +294,7 @@ bool Controller::AddTransaction(Transaction trans) {
     }
 }
 
-void Controller::UpdateBarrier(){
+void Controller::UpdatePrefetchTransfer(){
 
     auto pf_it = pf_queue_.begin();
     while(pf_it != pf_queue_.end())
@@ -334,14 +320,6 @@ void Controller::UpdateBarrier(){
             ++tr_it;
     }
 
-    // std::cout << tr_queue_.size() << pf_queue_.size() << std::endl;
-
-    if(tr_queue_.empty())
-        tr_overhead = clk_ - overhead_standard_clk;
-
-    if(pf_queue_.empty())
-        pref_overhead = clk_ - overhead_standard_clk;
-
 }
 
 Transaction Controller::DecompressPIMInst(Transaction trans, uint64_t clk_, int subvec_idx)
@@ -362,42 +340,43 @@ void Controller::SchedulePIMTransaction(){
     // std::cout << return_queue_.size() << " " << clk_ << std::endl;
 
     for (auto it = pim_queue_.begin(); it != pim_queue_.end(); it++) {
+
+        int total_pims = (config_.PIM_level == "rank") ? config_.ranks : config_.bankgroups;
+
         if(it->pim_values.transfer_cmd) {
-            it->complete_cycle = clk_ + it->pim_values.vlen * config_.tCCD_S;
+            it->complete_cycle = clk_ + it->pim_values.vlen * config_.tCCD_S * total_pims;
             tr_queue_.push_back(*it);
             pim_queue_.erase(it);
             break;
         }
+        // if(config_.vp_mapping)
+        // {
+        //     for(int i=0; i<total_pims; i++)
+        //     {
+        //         Transaction v_trans = *it;
+        //         Address addr = config_.AddressMapping(v_trans.addr);
 
-        int total_pims = (config_.PIM_level == "rank") ? config_.ranks : config_.bankgroups;
-        if(config_.vp_mapping)
-        {
-            for(int i=0; i<total_pims; i++)
-            {
-                Transaction v_trans = *it;
-                Address addr = config_.AddressMapping(v_trans.addr);
+        //         if(config_.PIM_level == "rank")
+        //             v_trans.addr = config_.GenerateAddress(addr.channel, i, addr.bankgroup, addr.bank, addr.row, addr.column);
+        //         else
+        //             v_trans.addr = config_.GenerateAddress(addr.channel, addr.rank, i, addr.bank, addr.row, addr.column);
 
-                if(config_.PIM_level == "rank")
-                    v_trans.addr = config_.GenerateAddress(addr.channel, i, addr.bankgroup, addr.bank, addr.row, addr.column);
-                else
-                    v_trans.addr = config_.GenerateAddress(addr.channel, addr.rank, i, addr.bank, addr.row, addr.column);
+        //         for(int j=0; j<it->pim_values.vlen; j++)
+        //         {
+        //             Transaction sub_trans = DecompressPIMInst(v_trans, clk_, j);
+        //             auto cmd = TransToCommand(sub_trans);
+        //             if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
+        //                                             cmd.Bank())) {
+        //                 cmd_queue_.AddCommand(cmd);
+        //                 pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
 
-                for(int j=0; j<it->pim_values.vlen; j++)
-                {
-                    Transaction sub_trans = DecompressPIMInst(v_trans, clk_, j);
-                    auto cmd = TransToCommand(sub_trans);
-                    if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
-                                                    cmd.Bank())) {
-                        cmd_queue_.AddCommand(cmd);
-                        pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
-
-                    }
-                }
-            }
-            pim_queue_.erase(it);
-            break;
-        }
-        else if(it->pim_values.prefetch_cmd)
+        //             }
+        //         }
+        //     }
+        //     pim_queue_.erase(it);
+        //     break;
+        // }
+        if(it->pim_values.prefetch_cmd)
         {
             for(int i=0; i<total_pims; i++)
             {
@@ -423,6 +402,24 @@ void Controller::SchedulePIMTransaction(){
             pim_queue_.erase(it);
             break;
         }
+        // else if(it->pim_values.deliver_cmd)
+        // {
+        //     if(it->pim_values.skewed_cycle < clk_)
+        //     {
+        //         for(int i=0; i<it->pim_values.vlen; i++)
+        //         {
+        //             Transaction sub_trans = DecompressPIMInst(*it, clk_, i);
+        //             auto cmd = TransToCommand(sub_trans);
+        //             if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
+        //                                             cmd.Bank())) {
+        //                 cmd_queue_.AddCommand(cmd);
+        //                 pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
+        //             }
+        //         }
+        //         pim_queue_.erase(it);
+        //         break;
+        //     }
+        // }
         else
         {
             for(int i=0; i<it->pim_values.vlen; i++)
@@ -557,7 +554,7 @@ void Controller::PrintEpochStats() {
 
 void Controller::PrintFinalStats(std::string txt_stats_name) {
     simple_stats_.PrintFinalStats(txt_stats_name);
-    std::cout << "Overhead on channel " << channel_id_ << " - prefech/transfer : " << cumul_pref_overhead << "/" << cumul_tr_overhead << std::endl;
+    std::cout << "Overhead on channel " << channel_id_ << " - prefech/transfer : " << cumul_pf_overhead << "/" << cumul_tr_overhead << std::endl;
 
 
 #ifdef THERMAL

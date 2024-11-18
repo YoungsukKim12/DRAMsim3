@@ -195,21 +195,21 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
 
 int TraceBasedCPUForHeterogeneousMemory::RunPIM() {
     int i = 0;
-    int total_batch = 1000;//(int)PIMMem_transaction.size();
-    
-    for(int i=0; i<total_batch-1; i++)
+    int total_batch = 10;//(int)PIMMem_transaction.size();
+    for(int i=0; i<total_batch; i++)
     {
         int pool_idx_pim = 0;
         int pool_idx_mem = 0;
         int poolings_pim = PIMMem_transaction[i].size();
         int poolings_mem = Mem_transaction[i].size();
-
+//        std::cout << poolings_pim << std::endl;
         // if(i%100 == 0)
-            std::cout << i << " / " << total_batch << std::endl;
+            // std::cout << i << " / " << total_batch << std::endl;
         while(pool_idx_pim < poolings_pim) // && pool_idx_mem < poolings_mem)
         {
             ClockTick();
             AddBatchTransactions(i, pool_idx_pim, pool_idx_mem);
+            // std::cout << "hi" << std::endl;
         }
 
     }
@@ -239,6 +239,11 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
     bool prefetch = cmd.compare("PR") == 0 ? true : false;
     bool transfer = cmd.compare("TR") == 0 ? true : false;
     bool readall = cmd.compare("RDD") == 0 ? true : false;
+    bool deliver = cmd.compare("DR") == 0 ? true : false;
+    int skewed_cycle = 0;
+    vlen = 1;
+    if(deliver)
+        skewed_cycle = vlen * PIMMem_config->burst_cycle;
     int curr_channel = PIMMemGetChannel(addr);
     bool PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false, prefetch || transfer);
     
@@ -258,7 +263,7 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
     }   
 
     if (PIM_mem_get_next_) {
-        PimValues pim_values(vlen, prefetch, transfer, readall, 0, 0);
+        PimValues pim_values(vlen, prefetch, transfer, readall, deliver, skewed_cycle, 0);
         // PIMMem_address_in_processing.push_back(emb_data.target_addr);
         if(transfer || prefetch)
         {
