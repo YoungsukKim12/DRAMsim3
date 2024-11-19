@@ -402,24 +402,24 @@ void Controller::SchedulePIMTransaction(){
             pim_queue_.erase(it);
             break;
         }
-        // else if(it->pim_values.deliver_cmd)
-        // {
-        //     if(it->pim_values.skewed_cycle < clk_)
-        //     {
-        //         for(int i=0; i<it->pim_values.vlen; i++)
-        //         {
-        //             Transaction sub_trans = DecompressPIMInst(*it, clk_, i);
-        //             auto cmd = TransToCommand(sub_trans);
-        //             if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
-        //                                             cmd.Bank())) {
-        //                 cmd_queue_.AddCommand(cmd);
-        //                 pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
-        //             }
-        //         }
-        //         pim_queue_.erase(it);
-        //         break;
-        //     }
-        // }
+        else if(it->pim_values.deliver_cmd)
+        {
+            if(it->pim_values.skewed_cycle < clk_)
+            {
+                for(int i=0; i<it->pim_values.vlen; i++)
+                {
+                    Transaction sub_trans = DecompressPIMInst(*it, clk_, i);
+                    auto cmd = TransToCommand(sub_trans);
+                    if (cmd_queue_.WillAcceptCommand(cmd.Rank(), cmd.Bankgroup(),
+                                                    cmd.Bank())) {
+                        cmd_queue_.AddCommand(cmd);
+                        pending_rd_q_.insert(std::make_pair(sub_trans.addr, sub_trans));
+                    }
+                }
+                pim_queue_.erase(it);
+                break;
+            }
+        }
         else
         {
             for(int i=0; i<it->pim_values.vlen; i++)
