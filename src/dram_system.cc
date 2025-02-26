@@ -10,9 +10,11 @@ int BaseDRAMSystem::total_channels_ = 0;
 
 BaseDRAMSystem::BaseDRAMSystem(Config &config, const std::string &output_dir,
                                std::function<void(uint64_t)> read_callback,
-                               std::function<void(uint64_t)> write_callback)
+                               std::function<void(uint64_t)> write_callback,
+                               std::function<void(bool)> pim_callback)
     : read_callback_(read_callback),
       write_callback_(write_callback),
+      pim_callback_(pim_callback),
       last_req_clk_(0),
       config_(config),
       timing_(config_),
@@ -104,10 +106,16 @@ void BaseDRAMSystem::RegisterCallbacks(
     write_callback_ = write_callback;
 }
 
+void BaseDRAMSystem::RegisterPIMCallbacks(std::function<void(bool)> pim_callback) {
+    pim_callback_ = pim_callback;
+}
+
 JedecDRAMSystem::JedecDRAMSystem(Config &config, const std::string &output_dir,
                                  std::function<void(uint64_t)> read_callback,
-                                 std::function<void(uint64_t)> write_callback)
-    : BaseDRAMSystem(config, output_dir, read_callback, write_callback) {
+                                 std::function<void(uint64_t)> write_callback,
+                                 std::function<void(bool)> pim_callback)
+    : BaseDRAMSystem(config, output_dir, read_callback, write_callback, pim_callback),
+      pim_finished(false) {
     if (config_.IsHMC()) {
         std::cerr << "Initialized a memory system with an HMC config file!"
                   << std::endl;
@@ -158,6 +166,7 @@ bool JedecDRAMSystem::AddTransaction(uint64_t hex_addr, bool is_write, PimValues
 void JedecDRAMSystem::ClockTick() {
     for (size_t i = 0; i < ctrls_.size(); i++) {
         // look ahead and return earlier
+        bool pim_finished = true;
         while (true) {
             auto pair = ctrls_[i]->ReturnDoneTrans(clk_);
             if (pair.second == 1) {
@@ -168,7 +177,10 @@ void JedecDRAMSystem::ClockTick() {
                 break;
             }
         }
+        pim_finished = pim_finished && ctrls_[i]->CheckAllQueueEmpty();
     }
+    pim_callback_(pim_finished);
+
     for (size_t i = 0; i < ctrls_.size(); i++) {
         ctrls_[i]->ClockTick();
     }
@@ -182,8 +194,9 @@ void JedecDRAMSystem::ClockTick() {
 
 IdealDRAMSystem::IdealDRAMSystem(Config &config, const std::string &output_dir,
                                  std::function<void(uint64_t)> read_callback,
-                                 std::function<void(uint64_t)> write_callback)
-    : BaseDRAMSystem(config, output_dir, read_callback, write_callback),
+                                 std::function<void(uint64_t)> write_callback,
+                                 std::function<void(bool)> pim_callback)
+    : BaseDRAMSystem(config, output_dir, read_callback, write_callback, pim_callback),
       latency_(config_.ideal_memory_latency) {}
 
 IdealDRAMSystem::~IdealDRAMSystem() {}

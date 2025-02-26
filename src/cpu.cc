@@ -127,10 +127,12 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     : CPU(config_file_HBM, output_dir),
     memory_system_PIM(config_file_HBM, output_dir,
         std::bind(&TraceBasedCPUForHeterogeneousMemory::ReadCallBack, this, std::placeholders::_1),
-        std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack, this, std::placeholders::_1)),
+        std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack, this, std::placeholders::_1),
+        std::bind(&TraceBasedCPUForHeterogeneousMemory::PIMCallBack, this, std::placeholders::_1)),
     memory_system_Mem(config_file_DIMM, output_dir,
             std::bind(&TraceBasedCPUForHeterogeneousMemory::ReadCallBack, this, std::placeholders::_1),
-            std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack, this, std::placeholders::_1)),
+            std::bind(&TraceBasedCPUForHeterogeneousMemory::WriteCallBack, this, std::placeholders::_1),
+            std::bind(&TraceBasedCPUForHeterogeneousMemory::PIMCallBack, this, std::placeholders::_1)),
     clk_PIM(0),
     clk_Mem(0)
 {
@@ -165,12 +167,6 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
     if((config_file_HBM.find("ProactivePIM") || config_file_HBM.find("SPACE")) != std::string::npos)
         is_using_hetero = true;
 
-    for(int i=0; i<channels*bankgroups; i++)
-    {
-        loads_per_bg.push_back(0);
-        loads_per_bg_for_q.push_back(0);
-    }
-
     int total_cycle = 0;
     LoadTrace(trace_file);
     std::cout << "------- simulation start --------" << std::endl;
@@ -195,7 +191,7 @@ TraceBasedCPUForHeterogeneousMemory::TraceBasedCPUForHeterogeneousMemory(const s
 
 int TraceBasedCPUForHeterogeneousMemory::RunPIM() {
     int i = 0;
-    int total_batch = 10;//(int)PIMMem_transaction.size();
+    int total_batch = (int)PIMMem_transaction.size();
     for(int i=0; i<total_batch; i++)
     {
         int pool_idx_pim = 0;
@@ -210,6 +206,10 @@ int TraceBasedCPUForHeterogeneousMemory::RunPIM() {
             ClockTick();
             AddBatchTransactions(i, pool_idx_pim, pool_idx_mem);
             // std::cout << "hi" << std::endl;
+        }
+        while(!pim_complete_)
+        {
+            ClockTick();
         }
 
     }
@@ -240,16 +240,16 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
     bool transfer = cmd.compare("TR") == 0 ? true : false;
     bool readall = cmd.compare("RDD") == 0 ? true : false;
     bool deliver = cmd.compare("DR") == 0 ? true : false;
+
     int skewed_cycle = 0;
-    vlen = 1;
     if(deliver)
         skewed_cycle = vlen * PIMMem_config->burst_cycle;
-    int curr_channel = PIMMemGetChannel(addr);
-    bool PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false, prefetch || transfer);
+    // int curr_channel = PIMMemGetChannel(addr);
     
     // if(transfer)
     //     std::cout << prefetch << " " << transfer << readall << std::endl;
 
+    bool PIM_mem_get_next_ = false;
     if(transfer || prefetch)
     {
         for(int i=0; i<channels; i++)
@@ -261,6 +261,8 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToPIMMem(int batch_idx,
                 break;
         }
     }   
+
+    PIM_mem_get_next_ = memory_system_PIM.WillAcceptTransaction(addr, false, prefetch || transfer);
 
     if (PIM_mem_get_next_) {
         PimValues pim_values(vlen, prefetch, transfer, readall, deliver, skewed_cycle, 0);
@@ -295,7 +297,7 @@ bool TraceBasedCPUForHeterogeneousMemory::AddTransactionsToMemory(int batch_idx,
     if (Mem_get_next_) {
         PimValues pim_values;
         memory_system_Mem.AddTransaction(target_addr, false, pim_values);
-        Mem_address_in_processing.push_back(target_addr);
+        // Mem_address_in_processing.push_back(target_addr);
         return true;
     }
     return false;
@@ -409,21 +411,3 @@ void TraceBasedCPUForHeterogeneousMemory::LoadTrace(string filename)
 }  // namespace dramsim3
 
 
-
-
-
-
-    // if(show_lb_ratio)
-    // {
-    //     for(int i=0; i<batch_max_load.size(); i++)
-    //     {
-    //         float batch_perfect_balance_load = float(batch_total_embeddings[i])/float(bankgroups*channels);          
-    //         batch_max_load[i] = (batch_max_load[i]) / batch_perfect_balance_load;
-    //     }
-    //     float median = findMedian(batch_max_load);
-    //     std::pair<float, float> quartiles = findQuartiles(batch_max_load);
-        
-    //     std::cout << "- Median : " << median << std::endl;
-    //     std::cout << "- Q1 : " << quartiles.first << std::endl;
-    //     std::cout << "- Q3 : " << quartiles.second << std::endl;
-    // }

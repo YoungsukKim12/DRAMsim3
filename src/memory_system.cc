@@ -4,7 +4,8 @@ namespace dramsim3 {
 MemorySystem::MemorySystem(const std::string &config_file,
                            const std::string &output_dir,
                            std::function<void(uint64_t)> read_callback,
-                           std::function<void(uint64_t)> write_callback)
+                           std::function<void(uint64_t)> write_callback,
+                           std::function<void(bool)> pim_callback)
     : config_(new Config(config_file, output_dir)) {
     // TODO: ideal memory type?
     if (config_->IsHMC()) {
@@ -12,7 +13,7 @@ MemorySystem::MemorySystem(const std::string &config_file,
                                            write_callback);
     } else {
         dram_system_ = new JedecDRAMSystem(*config_, output_dir, read_callback,
-                                           write_callback);
+                                           write_callback, pim_callback);
     }
     config_copy = config_;
 }
@@ -38,6 +39,11 @@ void MemorySystem::RegisterCallbacks(
     dram_system_->RegisterCallbacks(read_callback, write_callback);
 }
 
+void MemorySystem::RegisterPIMCallback(
+    std::function<void(bool)> pim_callback) {
+        dram_system_->RegisterPIMCallbacks(pim_callback);
+}
+
 bool MemorySystem::WillAcceptTransaction(uint64_t hex_addr,
                                          bool is_write, bool trpf) const {
     return dram_system_->WillAcceptTransaction(hex_addr, is_write, trpf);
@@ -53,8 +59,9 @@ void MemorySystem::ResetStats() { dram_system_->ResetStats(); }
 
 MemorySystem* GetMemorySystem(const std::string &config_file, const std::string &output_dir,
                  std::function<void(uint64_t)> read_callback,
-                 std::function<void(uint64_t)> write_callback) {
-    return new MemorySystem(config_file, output_dir, read_callback, write_callback);
+                 std::function<void(uint64_t)> write_callback,
+                 std::function<void(bool)> pim_callback) {
+    return new MemorySystem(config_file, output_dir, read_callback, write_callback, pim_callback);
 }
 }  // namespace dramsim3
 

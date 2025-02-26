@@ -16,7 +16,8 @@ class MemorySystem {
    public:
     MemorySystem(const std::string &config_file, const std::string &output_dir,
                  std::function<void(uint64_t)> read_callback,
-                 std::function<void(uint64_t)> write_callback);
+                 std::function<void(uint64_t)> write_callback,
+                 std::function<void(bool)> pim_callback);
     ~MemorySystem();
     void ClockTick();
     void RegisterCallbacks(std::function<void(uint64_t)> read_callback,
@@ -27,6 +28,7 @@ class MemorySystem {
     int GetQueueSize() const;
     void PrintStats(std::string tracename) const;
     void ResetStats();
+    void RegisterPIMCallback(std::function<void(bool)> pim_callback);
 
     bool WillAcceptTransaction(uint64_t hex_addr, bool is_write, bool trpf) const;
     bool AddTransaction(uint64_t hex_addr, bool is_write, PimValues pim_values);

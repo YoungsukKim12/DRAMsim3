@@ -20,8 +20,8 @@ Controller::Controller(int channel, const Config &config, const Timing &timing)
       refresh_(config, channel_state_),
       pf_overhead(0),
       tr_overhead(0),
-      cumul_pf_overhead(0),
-      cumul_tr_overhead(0),
+    //   cumul_pf_overhead(0),
+    //   cumul_tr_overhead(0),
       last_cmd_end_clk(0),
       overhead_standard_clk(0),
       pim_barrier(false),
@@ -79,6 +79,10 @@ std::pair<uint64_t, int> Controller::ReturnDoneTrans(uint64_t clk) {
         }
     }
     return std::make_pair(-1, -1);
+}
+
+bool Controller::CheckAllQueueEmpty() {
+    return pf_queue_.empty() && tr_queue_.empty() && pim_queue_.empty() && pending_rd_q_.empty() && return_queue_.empty();
 }
 
 void Controller::ClockTick() {
@@ -274,14 +278,13 @@ bool Controller::AddTransaction(Transaction trans) {
             return true;
         }
 
-        if(!config_.PIM_enabled)
-            pending_rd_q_.insert(std::make_pair(trans.addr, trans));
-
         if(config_.PIM_enabled) {
             trans.pim_values.skewed_cycle = clk_ + trans.pim_values.skewed_cycle;
             pim_queue_.push_back(trans);
         }
         else {
+            pending_rd_q_.insert(std::make_pair(trans.addr, trans));
+
             if (pending_rd_q_.count(trans.addr) == 1) {
                 if (is_unified_queue_) {
                     unified_queue_.push_back(trans);
@@ -342,7 +345,7 @@ void Controller::SchedulePIMTransaction(){
     for (auto it = pim_queue_.begin(); it != pim_queue_.end(); it++) {
 
         int total_pims = (config_.PIM_level == "rank") ? config_.ranks : config_.bankgroups;
-
+        
         if(it->pim_values.transfer_cmd) {
             it->complete_cycle = clk_ + it->pim_values.vlen * config_.tCCD_S * total_pims;
             tr_queue_.push_back(*it);
@@ -554,7 +557,7 @@ void Controller::PrintEpochStats() {
 
 void Controller::PrintFinalStats(std::string txt_stats_name) {
     simple_stats_.PrintFinalStats(txt_stats_name);
-    std::cout << "Overhead on channel " << channel_id_ << " - prefech/transfer : " << cumul_pf_overhead << "/" << cumul_tr_overhead << std::endl;
+    // std::cout << "Overhead on channel " << channel_id_ << " - prefech/transfer : " << cumul_pf_overhead << "/" << cumul_tr_overhead << std::endl;
 
 
 #ifdef THERMAL

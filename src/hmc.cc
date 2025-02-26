@@ -243,7 +243,7 @@ HMCResponse::HMCResponse(uint64_t id, HMCReqType req_type, int dest_link,
 HMCMemorySystem::HMCMemorySystem(Config &config, const std::string &output_dir,
                                  std::function<void(uint64_t)> read_callback,
                                  std::function<void(uint64_t)> write_callback)
-    : BaseDRAMSystem(config, output_dir, read_callback, write_callback),
+    : BaseDRAMSystem(config, output_dir, read_callback, write_callback, NULL),
       logic_clk_(0),
       logic_ps_(0),
       dram_ps_(0),

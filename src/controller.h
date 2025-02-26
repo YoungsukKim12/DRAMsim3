@@ -42,6 +42,7 @@ class Controller {
     std::pair<uint64_t, bool> GetBarrier();
     void UpdatePrefetchTransfer();
     int channel_id_;
+    bool CheckAllQueueEmpty();
 
    private:
     uint64_t clk_;
@@ -56,8 +57,8 @@ class Controller {
 
     uint64_t pf_overhead;
     uint64_t tr_overhead;
-    uint64_t cumul_pf_overhead;
-    uint64_t cumul_tr_overhead;
+    // uint64_t cumul_pf_overhead;
+    // uint64_t cumul_tr_overhead;
 
 
 #ifdef THERMAL

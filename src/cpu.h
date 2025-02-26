@@ -10,7 +10,7 @@
 #include "common.h"
 #include "pim.h"
 #include <tuple>
-#include "cache_.h"
+// #include "cache_.h"
 
 namespace dramsim3 {
 
@@ -20,11 +20,13 @@ class CPU {
         : memory_system_(
               config_file, output_dir,
               std::bind(&CPU::ReadCallBack, this, std::placeholders::_1),
-              std::bind(&CPU::WriteCallBack, this, std::placeholders::_1)),
+              std::bind(&CPU::WriteCallBack, this, std::placeholders::_1),
+              std::bind(&CPU::PIMCallBack, this, std::placeholders::_1)),
           clk_(0) {}
     virtual void ClockTick() = 0;
     void ReadCallBack(uint64_t addr) { return; }
     void WriteCallBack(uint64_t addr) { return; }
+    bool PIMCallBack(bool pim_finished) {return pim_finished;}
     void PrintStats(std::string tracename) { memory_system_.PrintStats(tracename); }
 
    protected:
@@ -78,6 +80,8 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     TraceBasedCPUForHeterogeneousMemory(const std::string& config_file_HBM, const std::string& config_file_DIMM, const std::string& output_dir, const std::string& trace_file);
     ~TraceBasedCPUForHeterogeneousMemory() {}
 
+    void PIMCallBack(bool pim_complete) {pim_complete_= pim_complete;}
+
     float findMedian(std::vector<float> &vec);
     std::pair<float, float> findQuartiles(std::vector<float> &vec);
 
@@ -93,7 +97,6 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     void AddBatchTransactions(int batch_idx, int& pool_idx_PIM, int& pool_idx_Mem);
     bool AddTransactionsToPIMMem(int batch_idx, int pool_idx_PIM);
     bool AddTransactionsToMemory(int batch_idx, int pool_idx_Mem);
-    bool UpdateInProcessTransactionList(uint64_t addr, std::list<uint64_t>& transactionlist, bool hbm);
 
    private:
     MemorySystem memory_system_PIM;
@@ -110,8 +113,6 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
 
     std::vector<std::vector<std::tuple<std::string, uint64_t, int>>> PIMMem_transaction;
     std::vector<std::vector<std::tuple<std::string, uint64_t>>> Mem_transaction;
-    std::list<uint64_t> PIMMem_address_in_processing;
-    std::list<uint64_t> Mem_address_in_processing;
 
     bool CA_compression;
     bool is_using_vp;
@@ -132,10 +133,9 @@ class TraceBasedCPUForHeterogeneousMemory : public CPU {
     int vec_transfers;
     int batch_size;
     std::string addrmapping;
-    std::vector<int> loads_per_bg;
-    std::vector<int> loads_per_bg_for_q;
     std::vector<float> batch_max_load;
     std::vector<int> batch_total_embeddings;
+    bool pim_complete_ = false;
 };
 
 }
